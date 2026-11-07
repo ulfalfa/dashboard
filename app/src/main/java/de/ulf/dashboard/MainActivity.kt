@@ -44,8 +44,9 @@ class MainActivity : Activity() {
         const val EXPORT_FILE_NAME = "dashboards.json"
     }
 
-    private lateinit var container: FrameLayout
-    private lateinit var webView: WebView
+    private lateinit var pagesLayout: FrameLayout // one stacked WebView per page; the shown one is on top
+    private var pages: List<Page> = emptyList()
+    private var webViews: List<WebView> = emptyList()
     private lateinit var status: TextView
     private var controller: RotationController? = null
     private lateinit var drawer: SettingsDrawer
@@ -59,7 +60,6 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-        webView = createWebView()
         status = TextView(this).apply { setTextColor(0xFFFF5555.toInt()); textSize = 20f }
         drawer = SettingsDrawer(this, object : DrawerListener {
             override fun onServerToggle(enabled: Boolean) = setServerEnabled(enabled)
@@ -67,9 +67,9 @@ class MainActivity : Activity() {
             override fun onImport() = pickFile(Intent.ACTION_OPEN_DOCUMENT, REQUEST_IMPORT)
             override fun onNewPassword() = regeneratePassword()
         })
-        container = FrameLayout(this)
-        setContentView(container.apply {
-            addView(webView)
+        pagesLayout = FrameLayout(this)
+        setContentView(FrameLayout(this).apply {
+            addView(pagesLayout)
             addView(status)
             addView(edgeStrip(), FrameLayout.LayoutParams(dp(EDGE_STRIP_DP), FrameLayout.LayoutParams.MATCH_PARENT, Gravity.START))
             addView(drawer, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
@@ -89,21 +89,29 @@ class MainActivity : Activity() {
         setServerEnabled(getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(PREF_SERVER_ENABLED, true))
     }
 
+    /**
+     * All WebViews stay visible and stacked: Chromium keeps rendering views it considers visible, so a page
+     * preloaded behind the current one is fully rendered when it is brought to the front.
+     */
     @SuppressLint("SetJavaScriptEnabled")
-    private fun createWebView(): WebView = WebView(this).apply {
+    private fun createWebView(index: Int, page: Page): WebView = WebView(this).apply {
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
         settings.mediaPlaybackRequiresUserGesture = false
-        webViewClient = DashboardClient()
+        webViewClient = DashboardClient(index)
+        applyZoom(this, page.zoom)
     }
 
-    /** The renderer process died (crash or OOM kill): the WebView is unusable, so replace it and restart the rotation. */
-    private fun replaceWebView() {
+    private fun buildWebViews() {
+        webViews.forEach { it.destroy() }
+        pagesLayout.removeAllViews()
+        webViews = pages.mapIndexed { index, page -> createWebView(index, page).also(pagesLayout::addView) }
+    }
+
+    /** The renderer process died (crash or OOM kill): all WebViews are unusable, so rebuild them and restart the rotation. */
+    private fun replaceWebViews() {
         controller?.stop()
-        container.removeView(webView)
-        webView.destroy()
-        webView = createWebView()
-        container.addView(webView, 0)
+        buildWebViews()
         status.text = "Renderer restarted"
         if (resumed) controller?.start()
     }
@@ -216,10 +224,12 @@ class MainActivity : Activity() {
         getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(PREF_SERVER_ENABLED, enabled).apply()
 
     /** Swaps in a new page list; runs on the UI thread. Restarts the rotation if the app is in the foreground. */
-    private fun applyConfig(pages: List<Page>) {
+    private fun applyConfig(newPages: List<Page>) {
         controller?.stop()
+        pages = newPages
+        buildWebViews()
         controller = RotationController(
-            Rotation(pages), WebViewLoader(), HandlerTimer(), LOAD_TIMEOUT_MS, ERROR_DELAY_MS
+            pages, WebViewLoader(), HandlerTimer(), HandlerTimer(), LOAD_TIMEOUT_MS, ERROR_DELAY_MS
         )
         if (resumed) controller?.start()
     }
@@ -258,24 +268,28 @@ class MainActivity : Activity() {
      * Browser-style zoom independent of the page's viewport meta tag: the WebView is laid out at
      * screen size / zoom (so the page sees a smaller viewport) and scaled back up to fill the screen.
      */
-    private fun applyZoom(zoomPercent: Int) {
+    private fun applyZoom(view: WebView, zoomPercent: Int) {
         val scale = zoomPercent / 100f
         val screen = windowManager.currentWindowMetrics.bounds
-        webView.layoutParams = FrameLayout.LayoutParams(
+        view.layoutParams = FrameLayout.LayoutParams(
             (screen.width() / scale).toInt(), (screen.height() / scale).toInt()
         )
-        webView.pivotX = 0f
-        webView.pivotY = 0f
-        webView.scaleX = scale
-        webView.scaleY = scale
+        view.pivotX = 0f
+        view.pivotY = 0f
+        view.scaleX = scale
+        view.scaleY = scale
     }
 
     private inner class WebViewLoader : PageLoader {
-        override fun load(page: Page) {
-            Log.i(TAG, "load ${page.url} zoom=${page.zoom}")
+        override fun load(index: Int) {
+            Log.i(TAG, "load ${pages[index].url}")
+            webViews[index].loadUrl(pages[index].url)
+        }
+
+        override fun show(index: Int) {
+            Log.i(TAG, "show ${pages[index].url}")
             status.text = ""
-            applyZoom(page.zoom)
-            webView.loadUrl(page.url)
+            webViews[index].bringToFront()
         }
     }
 
@@ -294,15 +308,16 @@ class MainActivity : Activity() {
         }
     }
 
-    private inner class DashboardClient : WebViewClient() {
+    private inner class DashboardClient(private val index: Int) : WebViewClient() {
         override fun onPageFinished(view: WebView, url: String) {
             Log.i(TAG, "finished $url")
-            controller?.onPageLoaded()
+            controller?.onPageLoaded(index)
         }
 
         override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+            if (view !in webViews) return true // already replaced after the first notification
             Log.e(TAG, "renderer gone, crashed=${detail.didCrash()}")
-            replaceWebView()
+            replaceWebViews()
             return true
         }
 
@@ -317,7 +332,7 @@ class MainActivity : Activity() {
         private fun fail(message: String) {
             Log.w(TAG, "failed $message")
             status.text = "Load failed: $message"
-            controller?.onPageFailed()
+            controller?.onPageFailed(index)
         }
     }
 }

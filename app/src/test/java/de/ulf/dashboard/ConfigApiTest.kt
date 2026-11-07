@@ -11,7 +11,7 @@ import java.io.File
 class ConfigApiTest {
     @get:Rule val tmp = TemporaryFolder()
 
-    private val seed = """{"pages":[{"url":"https://seed","seconds":10,"zoom":100,"renderDelaySeconds":0}]}"""
+    private val seed = """{"pages":[{"url":"https://seed","seconds":10,"zoom":100,"renderDelaySeconds":0,"reload":true}]}"""
     private val changes = mutableListOf<List<Page>>()
 
     private fun api(): ConfigApi =
@@ -34,16 +34,16 @@ class ConfigApiTest {
     @Test
     fun putSavesAndNotifiesListener() {
         val api = api()
-        val body = """{"pages":[{"url":"https://new","seconds":5,"zoom":80,"renderDelaySeconds":0}]}"""
+        val body = """{"pages":[{"url":"https://new","seconds":5,"zoom":80,"renderDelaySeconds":0,"reload":true}]}"""
         assertEquals(200, api.handle("PUT", "/api/pages", body).status)
-        assertEquals(listOf(listOf(Page("https://new", 5, 80, 0))), changes)
+        assertEquals(listOf(listOf(Page("https://new", 5, 80, 0, true))), changes)
         assertTrue(api.handle("GET", "/api/pages", "").body.contains("https://new"))
     }
 
     @Test
     fun invalidPutIsRejectedAndKeepsOldConfig() {
         val api = api()
-        val r = api.handle("PUT", "/api/pages", """{"pages":[{"url":"nope","seconds":5,"zoom":80,"renderDelaySeconds":0}]}""")
+        val r = api.handle("PUT", "/api/pages", """{"pages":[{"url":"nope","seconds":5,"zoom":80,"renderDelaySeconds":0,"reload":true}]}""")
         assertEquals(400, r.status)
         assertTrue(JSONObject(r.body).getString("error").contains("http"))
         assertTrue(changes.isEmpty())
