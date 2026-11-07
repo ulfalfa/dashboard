@@ -1,0 +1,6 @@
+{
+  "pages": [
+    { "url": "https://example.org", "seconds": 10, "zoom": 100 },
+    { "url": "https://www.wikipedia.org", "seconds": 10, "zoom": 150 }
+  ]
+}
