@@ -9,7 +9,7 @@ CI (`.github/workflows/ci.yml`) runs this on every push to `main` and every pull
 
 ## Release
 Manual: GitHub -> Actions -> Release -> Run workflow (branch `main`, version like `1.2.0`).
-Creates tag `v1.2.0` and a GitHub release with the signed `dashboard-1.2.0.apk`. Release notes come from [git-cliff](https://git-cliff.org) (`cliff.toml`), so commits must follow Conventional Commits (`feat: ...`, `fix: ...`); other commits are left out of the notes.
+Creates tag `v1.2.0` and a GitHub release with the signed `dashboard-1.2.0.apk`. Release notes come from [git-cliff](https://git-cliff.org) (`cliff.toml`), and the workflow commits the full `CHANGELOG.md` directly to `main` (`chore(release): vX.Y.Z`), so commits must follow Conventional Commits (`feat: ...`, `fix: ...`); other commits are left out of the notes.
 
 One-time setup of a signing key (keep the keystore safe - updates must be signed with the same key):
 

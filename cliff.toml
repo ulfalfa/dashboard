@@ -1,7 +1,8 @@
 # git-cliff config: changelog from Conventional Commits
 [changelog]
-header = ""
+header = "# Changelog\n"
 body = """
+## {{ version | default(value="Unreleased") }} - {{ timestamp | date(format="%Y-%m-%d") }}
 {% for group, commits in commits | group_by(attribute="group") %}
 ### {{ group | striptags | trim | upper_first }}
 {% for commit in commits %}
@@ -18,6 +19,7 @@ split_commits = false
 tag_pattern = "v[0-9]*"
 sort_commits = "oldest"
 commit_parsers = [
+  { message = "^chore\\(release\\)", skip = true },
   { message = "^feat", group = "Features" },
   { message = "^fix", group = "Bug fixes" },
   { message = "^perf", group = "Performance" },
