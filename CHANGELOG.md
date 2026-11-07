@@ -1,4 +1,13 @@
 # Changelog
+## v0.3.0 - 2026-11-07
+
+### Features
+
+- Add adaptive app icon (#7)
+
+### Maintenance
+
+- Add MIT license (#6)
 ## v0.2.0 - 2026-11-07
 
 ### Features
