@@ -34,6 +34,7 @@ class MainActivity : Activity() {
         const val SETTINGS_PORT = 2411
         const val CONFIG_ASSET = "dashboards.json"
         const val UI_ASSET = "index.html"
+        const val PASSWORD_FILE = "portal-password.txt"
         const val PREFS = "dashboard"
         const val PREF_SERVER_ENABLED = "server_enabled"
         const val EDGE_STRIP_DP = 32
@@ -50,6 +51,7 @@ class MainActivity : Activity() {
     private lateinit var drawer: SettingsDrawer
     private lateinit var api: ConfigApi
     private lateinit var store: ConfigStore
+    private lateinit var passwordStore: PasswordStore
     private var server: HttpServer? = null
     private var resumed = false
 
@@ -63,6 +65,7 @@ class MainActivity : Activity() {
             override fun onServerToggle(enabled: Boolean) = setServerEnabled(enabled)
             override fun onExport() = pickFile(Intent.ACTION_CREATE_DOCUMENT, REQUEST_EXPORT)
             override fun onImport() = pickFile(Intent.ACTION_OPEN_DOCUMENT, REQUEST_IMPORT)
+            override fun onNewPassword() = regeneratePassword()
         })
         container = FrameLayout(this)
         setContentView(container.apply {
@@ -72,6 +75,7 @@ class MainActivity : Activity() {
             addView(drawer, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         })
 
+        passwordStore = PasswordStore(File(filesDir, PASSWORD_FILE))
         store = ConfigStore(File(filesDir, CONFIG_ASSET), readAsset(CONFIG_ASSET))
         val pages = try {
             store.load()
@@ -175,9 +179,19 @@ class MainActivity : Activity() {
         if (enabled) startServer() else stopServer()
     }
 
-    private fun startServer() {
-        val httpServer = HttpServer(SETTINGS_PORT, api) { Log.w(TAG, it) }
+    private fun regeneratePassword() {
         try {
+            drawer.showCredentials(passwordStore.regenerate())
+            drawer.showMessage("Neues Passwort aktiv")
+        } catch (e: IOException) {
+            drawer.showMessage("Passwort nicht geändert: ${e.message}")
+        }
+    }
+
+    private fun startServer() {
+        val httpServer = HttpServer(SETTINGS_PORT, api, { passwordStore.load() }) { Log.w(TAG, it) }
+        try {
+            drawer.showCredentials(passwordStore.load())
             httpServer.start()
         } catch (e: IOException) {
             val message = "Start fehlgeschlagen: ${e.message} - ist Port $SETTINGS_PORT belegt? Schalter erneut betätigen."
