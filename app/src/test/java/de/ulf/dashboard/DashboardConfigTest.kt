@@ -9,9 +9,9 @@ class DashboardConfigTest {
     @Test
     fun parsesPagesInOrder() {
         val pages = DashboardConfig.parse(
-            """{"pages":[{"url":"https://a","seconds":10,"zoom":100,"renderDelaySeconds":0},{"url":"http://b","seconds":20,"zoom":75,"renderDelaySeconds":0}]}"""
+            """{"pages":[{"url":"https://a","seconds":10,"zoom":100,"renderDelaySeconds":0,"reload":true},{"url":"http://b","seconds":20,"zoom":75,"renderDelaySeconds":0,"reload":true}]}"""
         )
-        assertEquals(listOf(Page("https://a", 10, 100, 0), Page("http://b", 20, 75, 0)), pages)
+        assertEquals(listOf(Page("https://a", 10, 100, 0, true), Page("http://b", 20, 75, 0, true)), pages)
     }
 
     @Test
@@ -27,14 +27,14 @@ class DashboardConfigTest {
     @Test
     fun rejectsUrlWithoutHttpScheme() {
         assertThrows(ConfigException::class.java) {
-            DashboardConfig.parse("""{"pages":[{"url":"ftp://a","seconds":10,"zoom":100,"renderDelaySeconds":0}]}""")
+            DashboardConfig.parse("""{"pages":[{"url":"ftp://a","seconds":10,"zoom":100,"renderDelaySeconds":0,"reload":true}]}""")
         }
     }
 
     @Test
     fun rejectsNonPositiveSeconds() {
         assertThrows(ConfigException::class.java) {
-            DashboardConfig.parse("""{"pages":[{"url":"https://a","seconds":0,"zoom":100,"renderDelaySeconds":0}]}""")
+            DashboardConfig.parse("""{"pages":[{"url":"https://a","seconds":0,"zoom":100,"renderDelaySeconds":0,"reload":true}]}""")
         }
     }
 
@@ -49,7 +49,7 @@ class DashboardConfigTest {
     fun rejectsZoomOutOfRange() {
         listOf(9, 501).forEach { zoom ->
             assertThrows(ConfigException::class.java) {
-                DashboardConfig.parse("""{"pages":[{"url":"https://a","seconds":10,"zoom":$zoom,"renderDelaySeconds":0}]}""")
+                DashboardConfig.parse("""{"pages":[{"url":"https://a","seconds":10,"zoom":$zoom,"renderDelaySeconds":0,"reload":true}]}""")
             }
         }
     }
@@ -70,15 +70,24 @@ class DashboardConfigTest {
     }
 
     @Test
+    fun rejectsMissingOrNonBooleanReload() {
+        listOf("", ""","reload":"maybe"""").forEach { reload ->
+            assertThrows(ConfigException::class.java) {
+                DashboardConfig.parse("""{"pages":[{"url":"https://a","seconds":10,"zoom":100,"renderDelaySeconds":0$reload}]}""")
+            }
+        }
+    }
+
+    @Test
     fun rejectsNegativeRenderDelay() {
         assertThrows(ConfigException::class.java) {
-            DashboardConfig.parse("""{"pages":[{"url":"https://a","seconds":10,"zoom":100,"renderDelaySeconds":-1}]}""")
+            DashboardConfig.parse("""{"pages":[{"url":"https://a","seconds":10,"zoom":100,"renderDelaySeconds":-1,"reload":true}]}""")
         }
     }
 
     @Test
     fun roundTripsThroughJson() {
-        val pages = listOf(Page("https://a", 10, 100, 0), Page("https://b", 5, 200, 4))
+        val pages = listOf(Page("https://a", 10, 100, 0, true), Page("https://b", 5, 200, 4, true))
         assertEquals(pages, DashboardConfig.parse(DashboardConfig.toJson(pages)))
     }
 }

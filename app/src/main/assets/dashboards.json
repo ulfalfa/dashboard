@@ -1,6 +1,6 @@
 {
   "pages": [
-    { "url": "https://example.org", "seconds": 10, "zoom": 100, "renderDelaySeconds": 0 },
-    { "url": "https://www.wikipedia.org", "seconds": 10, "zoom": 150, "renderDelaySeconds": 0 }
+    { "url": "https://example.org", "seconds": 10, "zoom": 100, "renderDelaySeconds": 0, "reload": true },
+    { "url": "https://www.wikipedia.org", "seconds": 10, "zoom": 150, "renderDelaySeconds": 0, "reload": true }
   ]
 }

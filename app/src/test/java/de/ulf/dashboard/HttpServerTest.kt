@@ -14,7 +14,7 @@ import java.net.Socket
 class HttpServerTest {
     @get:Rule val tmp = TemporaryFolder()
 
-    private val seed = """{"pages":[{"url":"https://seed","seconds":10,"zoom":100,"renderDelaySeconds":0}]}"""
+    private val seed = """{"pages":[{"url":"https://seed","seconds":10,"zoom":100,"renderDelaySeconds":0,"reload":true}]}"""
     private val changes = mutableListOf<List<Page>>()
     private var port = 0
     private lateinit var server: HttpServer
@@ -57,7 +57,7 @@ class HttpServerTest {
 
     @Test
     fun unauthorizedPutDoesNotChangeConfig() {
-        val body = """{"pages":[{"url":"https://evil","seconds":5,"zoom":90,"renderDelaySeconds":0}]}"""
+        val body = """{"pages":[{"url":"https://evil","seconds":5,"zoom":90,"renderDelaySeconds":0,"reload":true}]}"""
         rawWithoutAuth("PUT /api/pages HTTP/1.1\r\nContent-Length: ${body.length}\r\n\r\n$body")
         assertTrue(changes.isEmpty())
     }
@@ -71,11 +71,11 @@ class HttpServerTest {
 
     @Test
     fun putBodyReachesApiIncludingUtf8() {
-        val body = """{"pages":[{"url":"https://exämple.org","seconds":5,"zoom":90,"renderDelaySeconds":0}]}"""
+        val body = """{"pages":[{"url":"https://exämple.org","seconds":5,"zoom":90,"renderDelaySeconds":0,"reload":true}]}"""
         val length = body.toByteArray().size
         val response = raw("PUT /api/pages HTTP/1.1\r\nContent-Length: $length\r\n\r\n$body")
         assertTrue(response.startsWith("HTTP/1.1 200 OK"))
-        assertEquals(listOf(listOf(Page("https://exämple.org", 5, 90, 0))), changes)
+        assertEquals(listOf(listOf(Page("https://exämple.org", 5, 90, 0, true))), changes)
     }
 
     @Test

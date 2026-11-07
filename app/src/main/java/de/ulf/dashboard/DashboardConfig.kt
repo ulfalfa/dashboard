@@ -6,7 +6,7 @@ import org.json.JSONObject
 
 class ConfigException(message: String, cause: Throwable?) : Exception(message, cause)
 
-/** Parses/serializes dashboards.json: {"pages":[{"url":"https://...","seconds":30,"zoom":100,"renderDelaySeconds":0}, ...]} */
+/** Parses/serializes dashboards.json: {"pages":[{"url":"https://...","seconds":30,"zoom":100,"renderDelaySeconds":0,"reload":true}, ...]} */
 object DashboardConfig {
     private const val MIN_SECONDS = 1
     private const val MIN_RENDER_DELAY = 0
@@ -25,7 +25,7 @@ object DashboardConfig {
         val entries = JSONArray()
         pages.forEach {
             entries.put(JSONObject().put("url", it.url).put("seconds", it.seconds).put("zoom", it.zoom)
-                    .put("renderDelaySeconds", it.renderDelaySeconds)
+                    .put("renderDelaySeconds", it.renderDelaySeconds).put("reload", it.reload)
             )
         }
         return JSONObject().put("pages", entries).toString(2)
@@ -45,6 +45,7 @@ object DashboardConfig {
             val seconds = entry.getInt("seconds")
             val zoom = entry.getInt("zoom")
             val renderDelay = entry.getInt("renderDelaySeconds")
+            val reload = entry.getBoolean("reload")
             if (!url.startsWith("http://") && !url.startsWith("https://")) {
                 throw ConfigException("pages[$i].url must start with http:// or https:// but was \"$url\"", null)
             }
@@ -57,10 +58,10 @@ object DashboardConfig {
             if (renderDelay < MIN_RENDER_DELAY) {
                 throw ConfigException("pages[$i].renderDelaySeconds must be >= $MIN_RENDER_DELAY but was $renderDelay", null)
             }
-            Page(url, seconds, zoom, renderDelay)
+            Page(url, seconds, zoom, renderDelay, reload)
         } catch (e: JSONException) {
             throw ConfigException(
-                "pages[$i] needs a string \"url\" and int \"seconds\", \"zoom\" and \"renderDelaySeconds\" (${e.message})", e
+                "pages[$i] needs a string \"url\" and int \"seconds\", \"zoom\" and \"renderDelaySeconds\" and boolean \"reload\" (${e.message})", e
             )
         }
 }

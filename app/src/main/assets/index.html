@@ -37,7 +37,7 @@
           border-radius: 999px; padding: 3px 10px; }
 
   #rows { list-style: none; margin: 0; padding: 8px; display: grid; gap: 8px; }
-  .row { display: grid; grid-template-columns: 32px minmax(0, 1fr) 110px 110px 130px auto; gap: 10px; align-items: end;
+  .row { display: grid; grid-template-columns: 32px minmax(0, 1fr) 110px 110px 130px 110px auto; gap: 10px; align-items: end;
          padding: 10px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; }
   .idx { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; align-self: center;
          background: var(--accent-soft); color: var(--accent); font-weight: 600; font-size: 14px; }
@@ -49,6 +49,8 @@
           background: var(--surface); color: var(--fg); font: inherit; }
   input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   input.invalid { border-color: var(--bad); background: var(--bad-soft); }
+  .rl { display: flex; align-items: center; gap: 8px; height: 38px; font-size: 14px; font-weight: 500; color: var(--fg); cursor: pointer; }
+  .rl input { width: 18px; height: 18px; padding: 0; accent-color: var(--accent); }
   .tools { display: flex; gap: 4px; align-self: end; }
 
   button { height: 38px; padding: 0 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface);
@@ -77,6 +79,7 @@
     .row .dur { grid-column: 2; }
     .row .zm { grid-column: 3; }
     .row .rd { grid-column: 4; }
+    .row .rl { grid-column: 2 / -1; }
     .row .tools { grid-column: 1 / -1; justify-content: flex-end; }
     #msg { margin-left: 0; width: 100%; }
   }
@@ -158,6 +161,9 @@ function addRow(page) {
     <label class="rd" title="Wartezeit nach dem Laden, bevor die Anzeigedauer beginnt (für spät rendernde Panels)">Render-Wartezeit
       <span class="field"><input class="render-delay" type="number" min="0" step="1" inputmode="numeric"><span class="unit">s</span></span>
     </label>
+    <label class="rl" title="Aus: Seite wird nur einmal geladen und danach nur noch eingeblendet (setzt Auto-Refresh der Seite voraus). An: Seite wird vor jedem Einblenden im Hintergrund neu geladen.">
+      <input class="reload" type="checkbox">Neu laden
+    </label>
     <div class="tools">
       <button type="button" class="icon" data-act="up" aria-label="Nach oben">${ICON.up}</button>
       <button type="button" class="icon" data-act="down" aria-label="Nach unten">${ICON.down}</button>
@@ -167,6 +173,7 @@ function addRow(page) {
   li.querySelector('.seconds').value = page.seconds;
   li.querySelector('.zoom').value = page.zoom;
   li.querySelector('.render-delay').value = page.renderDelaySeconds;
+  li.querySelector('.reload').checked = page.reload;
   rows.appendChild(li);
 }
 
@@ -183,7 +190,7 @@ rows.addEventListener('click', (e) => {
 rows.addEventListener('input', (e) => { e.target.classList.remove('invalid'); refresh(); });
 
 document.getElementById('add').addEventListener('click', () => {
-  addRow({ url: '', seconds: 30, zoom: 100, renderDelaySeconds: 0 });
+  addRow({ url: '', seconds: 30, zoom: 100, renderDelaySeconds: 0, reload: true });
   refresh();
   rows.lastElementChild.querySelector('.url-input').focus();
 });
@@ -194,6 +201,7 @@ function collect() {
     seconds: Number(li.querySelector('.seconds').value),
     zoom: Number(li.querySelector('.zoom').value),
     renderDelaySeconds: Number(li.querySelector('.render-delay').value),
+    reload: li.querySelector('.reload').checked,
   })) };
 }
 

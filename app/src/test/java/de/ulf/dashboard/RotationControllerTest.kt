@@ -5,8 +5,9 @@ import org.junit.Test
 
 class RotationControllerTest {
     private class FakeLoader : PageLoader {
-        val loaded = mutableListOf<Page>()
-        override fun load(page: Page) { loaded += page }
+        val events = mutableListOf<String>()
+        override fun load(index: Int) { events += "load$index" }
+        override fun show(index: Int) { events += "show$index" }
     }
 
     private class FakeTimer : Timer {
@@ -18,91 +19,125 @@ class RotationControllerTest {
     }
 
     private val loader = FakeLoader()
-    private val timer = FakeTimer()
-    private val controller = RotationController(
-        Rotation(listOf(Page("https://a", 10, 100, 0), Page("https://b", 20, 150, 0))), loader, timer, 30_000L, 5_000L
-    )
+    private val dwell = FakeTimer()
+    private val prepare = FakeTimer()
 
-    private fun urls(): List<String> = loader.loaded.map { it.url }
+    private fun controller(vararg pages: Page) =
+        RotationController(pages.toList(), loader, dwell, prepare, 30_000L, 5_000L)
+
+    private fun page(seconds: Int, renderDelay: Int, reload: Boolean) = Page("https://x", seconds, 100, renderDelay, reload)
 
     @Test
-    fun passesPerPageZoomToLoader() {
-        controller.start()
-        controller.onPageLoaded()
-        timer.fire()
-        assertEquals(listOf(100, 150), loader.loaded.map { it.zoom })
+    fun loadsFirstPageWithLoadTimeoutAndShowsItWhenLoaded() {
+        val c = controller(page(10, 0, true), page(20, 0, true))
+        c.start()
+        assertEquals(listOf("load0"), loader.events)
+        assertEquals(30_000L, prepare.delayMs)
+        c.onPageLoaded(0)
+        assertEquals(listOf("load0", "show0", "load1"), loader.events) // next page preloads right away
+        assertEquals(10_000L, dwell.delayMs)
     }
 
     @Test
-    fun waitsRenderDelayBeforeDwellStarts() {
-        val delayed = RotationController(
-            Rotation(listOf(Page("https://a", 10, 100, 3), Page("https://b", 20, 150, 0))), loader, timer, 30_000L, 5_000L
-        )
-        delayed.start()
-        delayed.onPageLoaded()
-        assertEquals(3_000L, timer.delayMs)
-        timer.fire()
-        assertEquals(10_000L, timer.delayMs)
-        assertEquals(listOf("https://a"), urls())
-        timer.fire()
-        assertEquals(listOf("https://a", "https://b"), urls())
+    fun switchesToPreloadedPageWhenDwellIsOver() {
+        val c = controller(page(10, 0, true), page(20, 0, true))
+        c.start()
+        c.onPageLoaded(0)
+        c.onPageLoaded(1)
+        assertEquals(listOf("load0", "show0", "load1"), loader.events) // still waiting for the dwell time
+        dwell.fire()
+        assertEquals(listOf("load0", "show0", "load1", "show1", "load0"), loader.events)
+        assertEquals(20_000L, dwell.delayMs)
     }
 
     @Test
-    fun ignoresFailureDuringRenderDelay() {
-        val delayed = RotationController(
-            Rotation(listOf(Page("https://a", 10, 100, 3))), loader, timer, 30_000L, 5_000L
-        )
-        delayed.start()
-        delayed.onPageLoaded()
-        delayed.onPageFailed()
-        assertEquals(3_000L, timer.delayMs)
+    fun waitsForNextPageIfDwellIsOverBeforeItLoaded() {
+        val c = controller(page(10, 0, true), page(20, 0, true))
+        c.start()
+        c.onPageLoaded(0)
+        dwell.fire()
+        assertEquals(listOf("load0", "show0", "load1"), loader.events)
+        c.onPageLoaded(1)
+        assertEquals("show1", loader.events[3])
     }
 
     @Test
-    fun loadsFirstPageWithLoadTimeout() {
-        controller.start()
-        assertEquals(listOf("https://a"), urls())
-        assertEquals(30_000L, timer.delayMs)
+    fun renderDelayHappensInBackgroundBeforeShowing() {
+        val c = controller(page(10, 3, true), page(20, 0, true))
+        c.start()
+        c.onPageLoaded(0)
+        assertEquals(listOf("load0"), loader.events)
+        assertEquals(3_000L, prepare.delayMs)
+        prepare.fire()
+        assertEquals(listOf("load0", "show0", "load1"), loader.events)
     }
 
     @Test
-    fun dwellsForConfiguredSecondsThenAdvances() {
-        controller.start()
-        controller.onPageLoaded()
-        assertEquals(10_000L, timer.delayMs)
-        timer.fire()
-        assertEquals(listOf("https://a", "https://b"), urls())
+    fun pageWithoutReloadIsOnlyLoadedOnce() {
+        val c = controller(page(10, 0, false), page(10, 0, false))
+        c.start()
+        c.onPageLoaded(0)
+        c.onPageLoaded(1)
+        dwell.fire() // show1, page 0 already loaded -> no load0
+        dwell.fire() // show0 again, no reload
+        assertEquals(listOf("load0", "show0", "load1", "show1", "show0"), loader.events)
     }
 
     @Test
-    fun skipsFailedPageAfterErrorDelay() {
-        controller.start()
-        controller.onPageFailed()
-        assertEquals(5_000L, timer.delayMs)
-        timer.fire()
-        assertEquals(listOf("https://a", "https://b"), urls())
+    fun failedPageIsSkippedAfterErrorDelayWhileCurrentStaysVisible() {
+        val c = controller(page(10, 0, true), page(10, 0, true), page(10, 0, true))
+        c.start()
+        c.onPageLoaded(0)
+        c.onPageFailed(1)
+        assertEquals(5_000L, prepare.delayMs)
+        prepare.fire()
+        assertEquals(listOf("load0", "show0", "load1", "load2"), loader.events)
+        c.onPageLoaded(2)
+        dwell.fire()
+        assertEquals("show2", loader.events.last { it.startsWith("show") })
     }
 
     @Test
-    fun skipsPageThatNeverFinishesLoading() {
-        controller.start()
-        timer.fire() // load timeout
-        assertEquals(listOf("https://a", "https://b"), urls())
+    fun pageThatNeverFinishesLoadingIsSkipped() {
+        val c = controller(page(10, 0, true), page(10, 0, true))
+        c.start()
+        prepare.fire() // load timeout of page 0
+        assertEquals(5_000L, prepare.delayMs)
+        prepare.fire()
+        assertEquals(listOf("load0", "load1"), loader.events)
     }
 
     @Test
-    fun ignoresPageFinishedAfterFailure() {
-        controller.start()
-        controller.onPageFailed()
-        controller.onPageLoaded() // WebView reports finished after an error
-        assertEquals(5_000L, timer.delayMs)
+    fun ignoresEventsOfPagesThatAreNotBeingPrepared() {
+        val c = controller(page(10, 0, true), page(10, 0, true))
+        c.start()
+        c.onPageLoaded(1) // wrong page
+        assertEquals(listOf("load0"), loader.events)
+        c.onPageFailed(0)
+        c.onPageLoaded(0) // finished after error
+        assertEquals(5_000L, prepare.delayMs)
+        assertEquals(listOf("load0"), loader.events)
     }
 
     @Test
-    fun stopCancelsPendingTimer() {
-        controller.start()
-        controller.stop()
-        assertEquals(null, timer.delayMs)
+    fun singlePageWithReloadReloadsInPlaceEachCycle() {
+        val c = controller(page(10, 0, true))
+        c.start()
+        c.onPageLoaded(0)
+        assertEquals(listOf("load0", "show0", "load0"), loader.events)
+        c.onPageLoaded(0)
+        dwell.fire()
+        assertEquals(listOf("load0", "show0", "load0", "show0", "load0"), loader.events)
+    }
+
+    @Test
+    fun stopCancelsTimersAndIgnoresEvents() {
+        val c = controller(page(10, 0, true))
+        c.start()
+        c.stop()
+        assertEquals(null, prepare.delayMs)
+        assertEquals(null, dwell.delayMs)
+        c.onPageLoaded(0)
+        assertEquals(listOf("load0"), loader.events)
     }
 }
