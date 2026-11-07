@@ -23,3 +23,6 @@ One-time setup of a signing key (keep the keystore safe - updates must be signed
 - Autostart: the app registers as a Home launcher. After installing, press Home and choose "Dashboard" -> "Always"; Android then starts it after every boot.
 - Per page `renderDelaySeconds`: wait after the load event (late-rendering Grafana panels) before the display time starts.
 - If the WebView renderer process dies, the app replaces the WebView and restarts the rotation.
+
+## Portal login
+The settings portal (port 2411) is protected with HTTP Basic auth: user `admin`, password generated on first start. It is shown in the side menu (swipe from the left edge) and can be regenerated there ("Neues Passwort erzeugen"). Basic auth is not encrypted on plain HTTP - use it in a trusted LAN only.

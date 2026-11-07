@@ -9,8 +9,18 @@ import java.net.Socket
 import java.net.SocketException
 import java.util.concurrent.Executors
 
-/** Minimal blocking HTTP/1.1 server: one request per connection, delegates to [ConfigApi]. */
-class HttpServer(private val port: Int, private val api: ConfigApi, private val log: (String) -> Unit) {
+/**
+ * Minimal blocking HTTP/1.1 server: one request per connection, delegates to [ConfigApi].
+ * Every request needs Basic auth with the current [password] (read per request, so changes apply immediately).
+ */
+class HttpServer(
+    private val port: Int,
+    private val api: ConfigApi,
+    private val password: () -> String,
+    private val log: (String) -> Unit,
+) {
+    private class Request(val method: String, val path: String, val body: String, val authorization: String?)
+
     private class BadRequest(message: String) : Exception(message)
 
     private var serverSocket: ServerSocket? = null
@@ -46,8 +56,12 @@ class HttpServer(private val port: Int, private val api: ConfigApi, private val 
             try {
                 it.soTimeout = READ_TIMEOUT_MS
                 val response = try {
-                    val (method, path, body) = readRequest(DataInputStream(it.getInputStream().buffered()))
-                    api.handle(method, path, body)
+                    val request = readRequest(DataInputStream(it.getInputStream().buffered()))
+                    if (BasicAuth.isAuthorized(request.authorization, password())) {
+                        api.handle(request.method, request.path, request.body)
+                    } else {
+                        HttpResponse(401, "text/plain; charset=utf-8", "Login required (user ${BasicAuth.USER})")
+                    }
                 } catch (e: BadRequest) {
                     HttpResponse(400, "text/plain; charset=utf-8", e.message.orEmpty())
                 }
@@ -58,21 +72,24 @@ class HttpServer(private val port: Int, private val api: ConfigApi, private val 
         }
     }
 
-    private fun readRequest(input: DataInputStream): Triple<String, String, String> {
+    private fun readRequest(input: DataInputStream): Request {
         val requestLine = readLine(input).split(" ")
         if (requestLine.size < 2) throw BadRequest("Malformed request line")
         var contentLength = 0
+        var authorization: String? = null
         while (true) {
             val header = readLine(input)
             if (header.isEmpty()) break
             if (header.startsWith("content-length:", ignoreCase = true)) {
                 contentLength = header.substringAfter(':').trim().toIntOrNull()
                     ?: throw BadRequest("Invalid Content-Length")
+            } else if (header.startsWith("authorization:", ignoreCase = true)) {
+                authorization = header.substringAfter(':').trim()
             }
         }
         if (contentLength !in 0..MAX_BODY_BYTES) throw BadRequest("Body must be 0-$MAX_BODY_BYTES bytes")
         val body = ByteArray(contentLength).also { input.readFully(it) }
-        return Triple(requestLine[0], requestLine[1].substringBefore('?'), body.toString(Charsets.UTF_8))
+        return Request(requestLine[0], requestLine[1].substringBefore('?'), body.toString(Charsets.UTF_8), authorization)
     }
 
     private fun readLine(input: DataInputStream): String {
@@ -93,6 +110,7 @@ class HttpServer(private val port: Int, private val api: ConfigApi, private val 
             "Content-Type: ${response.contentType}\r\n" +
             "Content-Length: ${body.size}\r\n" +
             "Cache-Control: no-store\r\n" +
+            (if (response.status == 401) "WWW-Authenticate: Basic realm=\"Dashboard\"\r\n" else "") +
             "Connection: close\r\n\r\n"
         client.getOutputStream().apply {
             write(head.toByteArray(Charsets.ISO_8859_1))
@@ -105,6 +123,7 @@ class HttpServer(private val port: Int, private val api: ConfigApi, private val 
         when (status) {
             200 -> "OK"
             400 -> "Bad Request"
+            401 -> "Unauthorized"
             404 -> "Not Found"
             405 -> "Method Not Allowed"
             else -> "Error"
