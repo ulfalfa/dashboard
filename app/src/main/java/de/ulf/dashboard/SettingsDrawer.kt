@@ -19,6 +19,7 @@ interface DrawerListener {
     fun onServerToggle(enabled: Boolean)
     fun onExport()
     fun onImport()
+    fun onNewPassword()
 }
 
 class SettingsDrawer(context: Context, private val listener: DrawerListener) : FrameLayout(context) {
@@ -32,6 +33,7 @@ class SettingsDrawer(context: Context, private val listener: DrawerListener) : F
     private val autoClose = Runnable { close() }
     private val serverSwitch = Switch(context).apply { text = "Webserver" ; textSize = 20f; setTextColor(WHITE) }
     private val serverStatus = TextView(context).apply { textSize = 15f; setTextColor(MUTED) }
+    private val credentials = TextView(context).apply { textSize = 15f; setTextColor(WHITE) }
     private val message = TextView(context).apply { textSize = 15f; setTextColor(WHITE) }
     private val panel = LinearLayout(context)
     private var updatingSwitch = false
@@ -55,6 +57,8 @@ class SettingsDrawer(context: Context, private val listener: DrawerListener) : F
                 .apply { topMargin = dp(32) })
             addView(serverStatus, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
                 .apply { topMargin = dp(8) })
+            addView(credentials, rowParams(16))
+            addView(button("Neues Passwort erzeugen") { restartAutoClose(); listener.onNewPassword() }, rowParams(8))
             addView(button("Konfiguration exportieren") { restartAutoClose(); listener.onExport() }, rowParams(32))
             addView(button("Konfiguration importieren") { restartAutoClose(); listener.onImport() }, rowParams(8))
             addView(message, rowParams(16))
@@ -74,6 +78,11 @@ class SettingsDrawer(context: Context, private val listener: DrawerListener) : F
         serverSwitch.isChecked = running
         updatingSwitch = false
         serverStatus.text = text
+    }
+
+    /** Shows the portal login so it can be read off the board when opening the portal from another device. */
+    fun showCredentials(password: String) {
+        credentials.text = "Portal-Login\nBenutzer: ${BasicAuth.USER}\nPasswort: $password"
     }
 
     /** Shows the result of the last export/import action. */
