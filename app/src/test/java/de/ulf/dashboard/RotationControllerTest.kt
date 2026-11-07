@@ -84,6 +84,19 @@ class RotationControllerTest {
     }
 
     @Test
+    fun loadTimeoutIsCancelledOnceThePageIsReady() {
+        val c = controller(page(8, 0, false), page(30, 0, true))
+        c.start()
+        c.onPageLoaded(0)
+        c.onPageLoaded(1)
+        assertEquals(null, prepare.delayMs) // a stale timeout would later fail the page prepared next
+        dwell.fire()
+        assertEquals(null, prepare.delayMs) // page 0 needs no reload, so it is ready without a timeout
+        dwell.fire()
+        assertEquals(listOf("show0", "show1", "show0"), loader.events.filter { it.startsWith("show") })
+    }
+
+    @Test
     fun failedPageIsSkippedAfterErrorDelayWhileCurrentStaysVisible() {
         val c = controller(page(10, 0, true), page(10, 0, true), page(10, 0, true))
         c.start()

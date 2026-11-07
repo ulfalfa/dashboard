@@ -90,6 +90,7 @@ class RotationController(
     }
 
     private fun ready() {
+        prepareTimer.cancel() // the load timeout of this page must not fire later and fail the next one
         prep = Prep.READY
         switchIfDue()
     }
