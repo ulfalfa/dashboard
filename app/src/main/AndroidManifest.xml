@@ -5,6 +5,7 @@
 
     <application
         android:label="Dashboard"
+        android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true"
         android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen">
         <activity

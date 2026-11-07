@@ -1,0 +1,26 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Display frame -->
+    <path
+        android:pathData="M35.1,33.3H72.9A3.4,3.4 0 0 1 76.3,36.7V67.3A3.4,3.4 0 0 1 72.9,70.7H35.1A3.4,3.4 0 0 1 31.7,67.3V36.7A3.4,3.4 0 0 1 35.1,33.3Z"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="4" />
+    <!-- Rotation arrow: ring, then head -->
+    <path
+        android:pathData="M63.7,52.2A9.7,9.7 0 1 1 60.9,45.3"
+        android:strokeColor="#2DD4BF"
+        android:strokeWidth="4" />
+    <path
+        android:fillColor="#2DD4BF"
+        android:pathData="M65.1,41.3L65.8,49.9L57,49.2Z" />
+    <!-- Page indicator dots -->
+    <path
+        android:fillColor="#6B7488"
+        android:pathData="M48.5,77.8m-1.4,0a1.4,1.4 0 1 1 2.8,0a1.4,1.4 0 1 1 -2.8,0M59.5,77.8m-1.4,0a1.4,1.4 0 1 1 2.8,0a1.4,1.4 0 1 1 -2.8,0" />
+    <path
+        android:fillColor="#2DD4BF"
+        android:pathData="M54,77.8m-1.4,0a1.4,1.4 0 1 1 2.8,0a1.4,1.4 0 1 1 -2.8,0" />
+</vector>
