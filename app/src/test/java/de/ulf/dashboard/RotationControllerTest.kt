@@ -20,7 +20,7 @@ class RotationControllerTest {
     private val loader = FakeLoader()
     private val timer = FakeTimer()
     private val controller = RotationController(
-        Rotation(listOf(Page("https://a", 10, 100), Page("https://b", 20, 150))), loader, timer, 30_000L, 5_000L
+        Rotation(listOf(Page("https://a", 10, 100, 0), Page("https://b", 20, 150, 0))), loader, timer, 30_000L, 5_000L
     )
 
     private fun urls(): List<String> = loader.loaded.map { it.url }
@@ -31,6 +31,32 @@ class RotationControllerTest {
         controller.onPageLoaded()
         timer.fire()
         assertEquals(listOf(100, 150), loader.loaded.map { it.zoom })
+    }
+
+    @Test
+    fun waitsRenderDelayBeforeDwellStarts() {
+        val delayed = RotationController(
+            Rotation(listOf(Page("https://a", 10, 100, 3), Page("https://b", 20, 150, 0))), loader, timer, 30_000L, 5_000L
+        )
+        delayed.start()
+        delayed.onPageLoaded()
+        assertEquals(3_000L, timer.delayMs)
+        timer.fire()
+        assertEquals(10_000L, timer.delayMs)
+        assertEquals(listOf("https://a"), urls())
+        timer.fire()
+        assertEquals(listOf("https://a", "https://b"), urls())
+    }
+
+    @Test
+    fun ignoresFailureDuringRenderDelay() {
+        val delayed = RotationController(
+            Rotation(listOf(Page("https://a", 10, 100, 3))), loader, timer, 30_000L, 5_000L
+        )
+        delayed.start()
+        delayed.onPageLoaded()
+        delayed.onPageFailed()
+        assertEquals(3_000L, timer.delayMs)
     }
 
     @Test
