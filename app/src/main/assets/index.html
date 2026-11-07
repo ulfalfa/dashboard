@@ -37,7 +37,7 @@
           border-radius: 999px; padding: 3px 10px; }
 
   #rows { list-style: none; margin: 0; padding: 8px; display: grid; gap: 8px; }
-  .row { display: grid; grid-template-columns: 32px minmax(0, 1fr) 120px 120px auto; gap: 10px; align-items: end;
+  .row { display: grid; grid-template-columns: 32px minmax(0, 1fr) 110px 110px 130px auto; gap: 10px; align-items: end;
          padding: 10px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; }
   .idx { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; align-self: center;
          background: var(--accent-soft); color: var(--accent); font-weight: 600; font-size: 14px; }
@@ -72,10 +72,11 @@
   #msg.busy { display: block; color: var(--muted); }
 
   @media (max-width: 720px) {
-    .row { grid-template-columns: 32px minmax(0, 1fr) minmax(0, 1fr); }
+    .row { grid-template-columns: 32px repeat(3, minmax(0, 1fr)); }
     .row .url { grid-column: 2 / -1; }
     .row .dur { grid-column: 2; }
     .row .zm { grid-column: 3; }
+    .row .rd { grid-column: 4; }
     .row .tools { grid-column: 1 / -1; justify-content: flex-end; }
     #msg { margin-left: 0; width: 100%; }
   }
@@ -135,7 +136,7 @@ function refresh() {
     li.querySelector('[data-act=up]').disabled = i === 0;
     li.querySelector('[data-act=down]').disabled = i === items.length - 1;
   });
-  const total = items.reduce((sum, li) => sum + (Number(li.querySelector('.seconds').value) || 0), 0);
+  const total = items.reduce((sum, li) => sum + (Number(li.querySelector('.seconds').value) || 0) + (Number(li.querySelector('.render-delay').value) || 0), 0);
   summary.textContent = `${items.length} ${items.length === 1 ? 'Seite' : 'Seiten'} · ${total} s pro Durchlauf`;
   empty.hidden = items.length > 0;
 }
@@ -154,6 +155,9 @@ function addRow(page) {
     <label class="zm">Zoom
       <span class="field"><input class="zoom" type="number" min="10" max="500" step="5" inputmode="numeric"><span class="unit">%</span></span>
     </label>
+    <label class="rd" title="Wartezeit nach dem Laden, bevor die Anzeigedauer beginnt (für spät rendernde Panels)">Render-Wartezeit
+      <span class="field"><input class="render-delay" type="number" min="0" step="1" inputmode="numeric"><span class="unit">s</span></span>
+    </label>
     <div class="tools">
       <button type="button" class="icon" data-act="up" aria-label="Nach oben">${ICON.up}</button>
       <button type="button" class="icon" data-act="down" aria-label="Nach unten">${ICON.down}</button>
@@ -162,6 +166,7 @@ function addRow(page) {
   li.querySelector('.url-input').value = page.url;
   li.querySelector('.seconds').value = page.seconds;
   li.querySelector('.zoom').value = page.zoom;
+  li.querySelector('.render-delay').value = page.renderDelaySeconds;
   rows.appendChild(li);
 }
 
@@ -178,7 +183,7 @@ rows.addEventListener('click', (e) => {
 rows.addEventListener('input', (e) => { e.target.classList.remove('invalid'); refresh(); });
 
 document.getElementById('add').addEventListener('click', () => {
-  addRow({ url: '', seconds: 30, zoom: 100 });
+  addRow({ url: '', seconds: 30, zoom: 100, renderDelaySeconds: 0 });
   refresh();
   rows.lastElementChild.querySelector('.url-input').focus();
 });
@@ -188,6 +193,7 @@ function collect() {
     url: li.querySelector('.url-input').value.trim(),
     seconds: Number(li.querySelector('.seconds').value),
     zoom: Number(li.querySelector('.zoom').value),
+    renderDelaySeconds: Number(li.querySelector('.render-delay').value),
   })) };
 }
 
@@ -199,6 +205,7 @@ function markInvalid() {
       [li.querySelector('.url-input'), (v) => /^https?:\/\//.test(v)],
       [li.querySelector('.seconds'), (v) => Number.isInteger(Number(v)) && Number(v) >= 1],
       [li.querySelector('.zoom'), (v) => Number.isInteger(Number(v)) && Number(v) >= 10 && Number(v) <= 500],
+      [li.querySelector('.render-delay'), (v) => v !== '' && Number.isInteger(Number(v)) && Number(v) >= 0],
     ];
     checks.forEach(([input, ok]) => {
       const bad = !ok(input.value.trim());
@@ -221,7 +228,7 @@ async function load() {
 
 saveBtn.addEventListener('click', async () => {
   if (!rows.children.length) { say('Mindestens eine Seite wird benötigt.', 'err'); return; }
-  if (!markInvalid()) { say('Bitte die markierten Felder korrigieren (URL mit http(s)://, Dauer ≥ 1, Zoom 10–500).', 'err'); return; }
+  if (!markInvalid()) { say('Bitte die markierten Felder korrigieren (URL mit http(s)://, Dauer ≥ 1, Zoom 10–500, Wartezeit ≥ 0).', 'err'); return; }
   saveBtn.disabled = true;
   say('Speichere …', 'busy');
   try {

@@ -7,7 +7,7 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 
 class ConfigTransferTest {
-    private val pages = listOf(Page("https://a", 10, 100), Page("https://b", 20, 150))
+    private val pages = listOf(Page("https://a", 10, 100, 0), Page("https://b", 20, 150, 0))
 
     private fun parse(bytes: ByteArray): List<Page> = ConfigTransfer.parseImport(ByteArrayInputStream(bytes))
 

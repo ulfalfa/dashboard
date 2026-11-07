@@ -15,6 +15,7 @@ import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.WindowManager
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -42,6 +43,7 @@ class MainActivity : Activity() {
         const val EXPORT_FILE_NAME = "dashboards.json"
     }
 
+    private lateinit var container: FrameLayout
     private lateinit var webView: WebView
     private lateinit var status: TextView
     private var controller: RotationController? = null
@@ -51,24 +53,19 @@ class MainActivity : Activity() {
     private var server: HttpServer? = null
     private var resumed = false
 
-    @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-        webView = WebView(this).apply {
-            settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true
-            settings.mediaPlaybackRequiresUserGesture = false
-            webViewClient = DashboardClient()
-        }
+        webView = createWebView()
         status = TextView(this).apply { setTextColor(0xFFFF5555.toInt()); textSize = 20f }
         drawer = SettingsDrawer(this, object : DrawerListener {
             override fun onServerToggle(enabled: Boolean) = setServerEnabled(enabled)
             override fun onExport() = pickFile(Intent.ACTION_CREATE_DOCUMENT, REQUEST_EXPORT)
             override fun onImport() = pickFile(Intent.ACTION_OPEN_DOCUMENT, REQUEST_IMPORT)
         })
-        setContentView(FrameLayout(this).apply {
+        container = FrameLayout(this)
+        setContentView(container.apply {
             addView(webView)
             addView(status)
             addView(edgeStrip(), FrameLayout.LayoutParams(dp(EDGE_STRIP_DP), FrameLayout.LayoutParams.MATCH_PARENT, Gravity.START))
@@ -86,6 +83,25 @@ class MainActivity : Activity() {
         if (pages.isNotEmpty()) applyConfig(pages)
         api = ConfigApi(store, readAsset(UI_ASSET)) { changed -> runOnUiThread { applyConfig(changed) } }
         setServerEnabled(getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(PREF_SERVER_ENABLED, true))
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun createWebView(): WebView = WebView(this).apply {
+        settings.javaScriptEnabled = true
+        settings.domStorageEnabled = true
+        settings.mediaPlaybackRequiresUserGesture = false
+        webViewClient = DashboardClient()
+    }
+
+    /** The renderer process died (crash or OOM kill): the WebView is unusable, so replace it and restart the rotation. */
+    private fun replaceWebView() {
+        controller?.stop()
+        container.removeView(webView)
+        webView.destroy()
+        webView = createWebView()
+        container.addView(webView, 0)
+        status.text = "Renderer restarted"
+        if (resumed) controller?.start()
     }
 
     /** Invisible strip on the left edge: swiping right from it opens the drawer. */
@@ -268,6 +284,12 @@ class MainActivity : Activity() {
         override fun onPageFinished(view: WebView, url: String) {
             Log.i(TAG, "finished $url")
             controller?.onPageLoaded()
+        }
+
+        override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+            Log.e(TAG, "renderer gone, crashed=${detail.didCrash()}")
+            replaceWebView()
+            return true
         }
 
         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {

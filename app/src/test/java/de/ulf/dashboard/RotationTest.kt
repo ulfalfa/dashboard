@@ -5,8 +5,8 @@ import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class RotationTest {
-    private val a = Page("https://a", 5, 100)
-    private val b = Page("https://b", 5, 100)
+    private val a = Page("https://a", 5, 100, 0)
+    private val b = Page("https://b", 5, 100, 0)
 
     @Test
     fun startsAtFirstPage() {

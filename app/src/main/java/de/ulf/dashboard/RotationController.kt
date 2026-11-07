@@ -11,7 +11,7 @@ interface Timer {
 }
 
 /**
- * State machine: LOADING -> (loaded) -> SHOWING -> (dwell elapsed) -> next page.
+ * State machine: LOADING -> (loaded) -> RENDERING (render delay, skipped if 0) -> SHOWING -> (dwell elapsed) -> next page.
  * Failures and load timeouts skip to the next page, so one broken dashboard never blocks the rotation.
  * Events outside LOADING (e.g. a late callback of the previous page) are ignored.
  */
@@ -22,7 +22,7 @@ class RotationController(
     private val loadTimeoutMs: Long,
     private val errorDelayMs: Long,
 ) {
-    private enum class State { IDLE, LOADING, SHOWING }
+    private enum class State { IDLE, LOADING, RENDERING, SHOWING }
 
     private var state = State.IDLE
 
@@ -35,8 +35,18 @@ class RotationController(
 
     fun onPageLoaded() {
         if (state != State.LOADING) return
+        val page = rotation.current()
+        if (page.renderDelaySeconds > 0) {
+            state = State.RENDERING
+            timer.start(page.renderDelaySeconds * 1000L) { startDwell(page) }
+        } else {
+            startDwell(page)
+        }
+    }
+
+    private fun startDwell(page: Page) {
         state = State.SHOWING
-        timer.start(rotation.current().seconds * 1000L) { showNext() }
+        timer.start(page.seconds * 1000L) { showNext() }
     }
 
     fun onPageFailed() {

@@ -18,3 +18,8 @@ One-time setup of a signing key (keep the keystore safe - updates must be signed
     gh secret set KEYSTORE_PASSWORD
     gh secret set KEY_ALIAS
     gh secret set KEY_PASSWORD
+
+## Kiosk setup on the ViewBoard
+- Autostart: the app registers as a Home launcher. After installing, press Home and choose "Dashboard" -> "Always"; Android then starts it after every boot.
+- Per page `renderDelaySeconds`: wait after the load event (late-rendering Grafana panels) before the display time starts.
+- If the WebView renderer process dies, the app replaces the WebView and restarts the rotation.
