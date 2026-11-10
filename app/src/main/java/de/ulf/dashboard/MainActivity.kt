@@ -273,7 +273,8 @@ class MainActivity : Activity() {
         view.layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
         view.settings.useWideViewPort = false
         view.settings.loadWithOverviewMode = false
-        view.setInitialScale(if (zoomPercent == 100) 0 else zoomPercent)
+        // 0 would mean "WebView default" (density-scaled), which differs from an explicit 100
+        view.setInitialScale(zoomPercent)
     }
 
     private inner class WebViewLoader : PageLoader {
