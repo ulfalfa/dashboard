@@ -100,7 +100,7 @@ class MainActivity : Activity() {
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
         settings.mediaPlaybackRequiresUserGesture = false
-        settings.userAgentString = desktopUserAgent(settings.userAgentString)
+        if (page.desktop) settings.userAgentString = desktopUserAgent(settings.userAgentString)
         webViewClient = DashboardClient(index)
         applyZoom(this, page.zoom)
     }

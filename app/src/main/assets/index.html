@@ -37,7 +37,7 @@
           border-radius: 999px; padding: 3px 10px; }
 
   #rows { list-style: none; margin: 0; padding: 8px; display: grid; gap: 8px; }
-  .row { display: grid; grid-template-columns: 32px minmax(0, 1fr) 110px 110px 130px 110px auto; gap: 10px; align-items: end;
+  .row { display: grid; grid-template-columns: 32px minmax(0, 1fr) 110px 110px 130px 110px 110px auto; gap: 10px; align-items: end;
          padding: 10px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; }
   .idx { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; align-self: center;
          background: var(--accent-soft); color: var(--accent); font-weight: 600; font-size: 14px; }
@@ -97,7 +97,7 @@
     .row .dur { grid-column: 2; }
     .row .zm { grid-column: 3; }
     .row .rd { grid-column: 4; }
-    .row .rl { grid-column: 2 / -1; }
+    .row .rl, .row .dk { grid-column: 2 / -1; }
     .row .tools { grid-column: 1 / -1; justify-content: flex-end; }
     #msg { margin-left: 0; width: 100%; }
   }
@@ -211,6 +211,9 @@ function addRow(page) {
     <label class="rl" title="Aus: Seite wird nur einmal geladen und danach nur noch eingeblendet (setzt Auto-Refresh der Seite voraus). An: Seite wird vor jedem Einblenden im Hintergrund neu geladen.">
       <input class="reload" type="checkbox">Neu laden
     </label>
+    <label class="rl dk" title="An: die Seite bekommt einen Desktop-User-Agent und liefert ihr Desktop-Layout. Aus: Standard-Browserkennung der WebView (Mobil-Layout).">
+      <input class="desktop" type="checkbox">Desktop
+    </label>
     <div class="tools">
       <button type="button" class="icon" data-act="up" aria-label="Nach oben">${ICON.up}</button>
       <button type="button" class="icon" data-act="down" aria-label="Nach unten">${ICON.down}</button>
@@ -221,6 +224,7 @@ function addRow(page) {
   li.querySelector('.zoom').value = page.zoom;
   li.querySelector('.render-delay').value = page.renderDelaySeconds;
   li.querySelector('.reload').checked = page.reload;
+  li.querySelector('.desktop').checked = page.desktop !== false;
   rows.appendChild(li);
 }
 
@@ -237,7 +241,7 @@ rows.addEventListener('click', (e) => {
 rows.addEventListener('input', (e) => { e.target.classList.remove('invalid'); refresh(); });
 
 document.getElementById('add').addEventListener('click', () => {
-  addRow({ url: '', seconds: 30, zoom: 100, renderDelaySeconds: 0, reload: true });
+  addRow({ url: '', seconds: 30, zoom: 100, renderDelaySeconds: 0, reload: true, desktop: true });
   refresh();
   rows.lastElementChild.querySelector('.url-input').focus();
 });
@@ -249,6 +253,7 @@ function collect() {
     zoom: Number(li.querySelector('.zoom').value),
     renderDelaySeconds: Number(li.querySelector('.render-delay').value),
     reload: li.querySelector('.reload').checked,
+    desktop: li.querySelector('.desktop').checked,
   })) };
 }
 
