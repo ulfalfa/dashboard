@@ -1,4 +1,9 @@
 # Changelog
+## v0.4.1 - 2026-11-10
+
+### Bug fixes
+
+- Desktop user agent, selectable per page (#11)
 ## v0.4.0 - 2026-11-10
 
 ### Bug fixes
