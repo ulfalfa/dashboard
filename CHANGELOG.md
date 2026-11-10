@@ -1,4 +1,9 @@
 # Changelog
+## v0.4.2 - 2026-11-10
+
+### Bug fixes
+
+- Send real desktop user agent in desktop mode (#12)
 ## v0.4.1 - 2026-11-10
 
 ### Bug fixes
