@@ -1,4 +1,9 @@
 # Changelog
+## v0.4.3 - 2026-11-10
+
+### Maintenance
+
+- Derive release version from conventional commits (#13)
 ## v0.4.2 - 2026-11-10
 
 ### Bug fixes
