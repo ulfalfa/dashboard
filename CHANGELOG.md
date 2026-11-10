@@ -1,4 +1,9 @@
 # Changelog
+## v0.3.1 - 2026-11-10
+
+### Bug fixes
+
+- Use WebView zoom instead of View scale to stop flicker on Android 16 (#8)
 ## v0.3.0 - 2026-11-07
 
 ### Features
