@@ -265,19 +265,15 @@ class MainActivity : Activity() {
     }
 
     /**
-     * Browser-style zoom independent of the page's viewport meta tag: the WebView is laid out at
-     * screen size / zoom (so the page sees a smaller viewport) and scaled back up to fill the screen.
+     * Zoom by the WebView itself: the page is laid out at screen size / zoom and the WebView fills the screen.
+     * A View transform (scaleX/scaleY) made Chromium re-raster the scaled surface and flicker on Android 16.
+     * The viewport meta tag is ignored (no wide viewport), so the zoom applies to every page alike.
      */
     private fun applyZoom(view: WebView, zoomPercent: Int) {
-        val scale = zoomPercent / 100f
-        val screen = windowManager.currentWindowMetrics.bounds
-        view.layoutParams = FrameLayout.LayoutParams(
-            (screen.width() / scale).toInt(), (screen.height() / scale).toInt()
-        )
-        view.pivotX = 0f
-        view.pivotY = 0f
-        view.scaleX = scale
-        view.scaleY = scale
+        view.layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
+        view.settings.useWideViewPort = false
+        view.settings.loadWithOverviewMode = false
+        view.setInitialScale(if (zoomPercent == 100) 0 else zoomPercent)
     }
 
     private inner class WebViewLoader : PageLoader {
