@@ -28,3 +28,9 @@ commit_parsers = [
   { message = "^test", group = "Tests" },
   { message = "^(ci|build|chore)", group = "Maintenance" },
 ]
+
+[bump]
+# feat -> minor, fix -> patch; a breaking change stays below 1.0.0 (bumps minor) until the major is raised by hand
+features_always_bump_minor = true
+breaking_always_bump_major = false
+initial_tag = "v0.1.0"

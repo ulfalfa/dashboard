@@ -8,7 +8,7 @@ Rotating web dashboard for the ViewSonic ViewBoard (Android 11). Settings portal
 CI (`.github/workflows/ci.yml`) runs this on every push to `main` and every pull request.
 
 ## Release
-Manual: GitHub -> Actions -> Release -> Run workflow (branch `main`, version like `1.2.0`).
+Manual: GitHub -> Actions -> Release -> Run workflow (branch `main`). Leave `version` empty: it is derived from the Conventional Commits since the last tag (`fix` -> patch, `feat` -> minor, breaking `!` -> minor while below 1.0.0, see `[bump]` in `cliff.toml`). Enter a version like `1.2.0` only to override it. The run fails if there are no commits since the last tag.
 Creates tag `v1.2.0` and a GitHub release with the signed `dashboard-1.2.0.apk`. Release notes come from [git-cliff](https://git-cliff.org) (`cliff.toml`), and the workflow commits the full `CHANGELOG.md` directly to `main` (`chore(release): vX.Y.Z`), so commits must follow Conventional Commits (`feat: ...`, `fix: ...`); other commits are left out of the notes.
 
 One-time setup of a signing key (keep the keystore safe - updates must be signed with the same key):
