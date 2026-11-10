@@ -6,6 +6,12 @@ interface PageLoader {
     fun load(index: Int)
 
     fun show(index: Int)
+
+    /** The page finished loading; its render delay, if any, still follows. */
+    fun loaded(index: Int) {}
+
+    /** The page did not finish loading within the load timeout. */
+    fun timedOut(index: Int) {}
 }
 
 /** Single-slot timer: start() replaces any pending callback. */
@@ -20,6 +26,7 @@ interface Timer {
  * page is ready, it is shown. Pages with `reload = false` that were loaded before are READY immediately.
  * A failed or timed-out page is skipped after [errorDelayMs]; the current page stays visible meanwhile.
  * Events for a page that is not being prepared (e.g. late callbacks) are ignored.
+ * Manual control: [pause]/[resume] the dwell timer, [next]/[previous] page, [reload] the current page.
  */
 class RotationController(
     private val pages: List<Page>,
@@ -37,6 +44,10 @@ class RotationController(
     private var prep = Prep.IDLE
     private var dwellElapsed = false
 
+    @Volatile
+    var isPaused = false
+        private set
+
     init {
         require(pages.isNotEmpty()) { "RotationController needs at least one page" }
     }
@@ -52,12 +63,54 @@ class RotationController(
         prep = Prep.IDLE
         shown = NONE
         dwellElapsed = false
+        isPaused = false
         loaded.fill(false)
+    }
+
+    /** Keeps the current page on screen; the next page keeps preloading. */
+    fun pause() {
+        isPaused = true
+        dwellTimer.cancel()
+    }
+
+    /** Restarts the full dwell time of the current page. */
+    fun resume() {
+        if (!isPaused) return
+        isPaused = false
+        if (shown != NONE) startDwell()
+    }
+
+    /** Skips the rest of the dwell time; waits for the next page if it is not ready yet. */
+    fun next() {
+        if (shown == NONE) return
+        dwellTimer.cancel()
+        dwellElapsed = true
+        switchIfDue()
+    }
+
+    fun previous() {
+        if (shown == NONE) return
+        jumpTo((shown - 1 + pages.size) % pages.size)
+    }
+
+    /** Loads the current page again in the background and shows it when done. */
+    fun reload() {
+        if (shown == NONE) return
+        loaded[shown] = false
+        jumpTo(shown)
+    }
+
+    private fun jumpTo(index: Int) {
+        dwellTimer.cancel()
+        prepareTimer.cancel()
+        dwellElapsed = true
+        prepare(index)
     }
 
     fun onPageLoaded(index: Int) {
         if (prep != Prep.LOADING || index != preparing) return
         loaded[index] = true
+        loader.loaded(index)
         val delaySeconds = pages[index].renderDelaySeconds
         if (delaySeconds > 0) {
             prep = Prep.RENDERING
@@ -81,7 +134,10 @@ class RotationController(
         prep = Prep.LOADING
         loaded[index] = false
         loader.load(index)
-        prepareTimer.start(loadTimeoutMs) { failed() }
+        prepareTimer.start(loadTimeoutMs) {
+            loader.timedOut(index)
+            failed()
+        }
     }
 
     private fun failed() {
@@ -101,11 +157,15 @@ class RotationController(
         shown = preparing
         dwellElapsed = false
         loader.show(shown)
+        if (!isPaused) startDwell()
+        prepare(nextIndex(shown))
+    }
+
+    private fun startDwell() {
         dwellTimer.start(pages[shown].seconds * 1000L) {
             dwellElapsed = true
             switchIfDue()
         }
-        prepare(nextIndex(shown))
     }
 
     private fun nextIndex(index: Int): Int = (index + 1) % pages.size

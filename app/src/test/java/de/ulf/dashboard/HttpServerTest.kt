@@ -22,7 +22,11 @@ class HttpServerTest {
     @Before
     fun setUp() {
         port = ServerSocket(0).use { it.localPort } // free port
-        val api = ConfigApi(ConfigStore(File(tmp.root, "d.json"), seed), "<html>ui</html>") { changes += it }
+        val operations = object : DashboardOperations {
+            override fun statusJson(): String = "{}"
+            override fun control(action: ControlAction) {}
+        }
+        val api = ConfigApi(ConfigStore(File(tmp.root, "d.json"), seed), "<html>ui</html>", operations) { changes += it }
         server = HttpServer(port, api, { PASSWORD }) { }
         server.start()
     }

@@ -8,6 +8,10 @@ class RotationControllerTest {
         val events = mutableListOf<String>()
         override fun load(index: Int) { events += "load$index" }
         override fun show(index: Int) { events += "show$index" }
+        val loadedPages = mutableListOf<Int>()
+        val timedOutPages = mutableListOf<Int>()
+        override fun loaded(index: Int) { loadedPages += index }
+        override fun timedOut(index: Int) { timedOutPages += index }
     }
 
     private class FakeTimer : Timer {
@@ -152,5 +156,100 @@ class RotationControllerTest {
         assertEquals(null, dwell.delayMs)
         c.onPageLoaded(0)
         assertEquals(listOf("load0"), loader.events)
+    }
+
+    private fun shows() = loader.events.filter { it.startsWith("show") }
+
+    @Test
+    fun reportsLoadedAndTimedOutPagesToTheLoader() {
+        val c = controller(page(10, 0, true), page(10, 0, true))
+        c.start()
+        c.onPageLoaded(0)
+        prepare.fire() // load timeout of page 1
+        assertEquals(listOf(0), loader.loadedPages)
+        assertEquals(listOf(1), loader.timedOutPages)
+    }
+
+    @Test
+    fun pauseKeepsCurrentPageAndResumeRestartsDwell() {
+        val c = controller(page(10, 0, true), page(20, 0, true))
+        c.start()
+        c.onPageLoaded(0)
+        c.pause()
+        assertEquals(true, c.isPaused)
+        assertEquals(null, dwell.delayMs)
+        c.onPageLoaded(1) // preloading continues while paused
+        assertEquals(listOf("load0", "show0", "load1"), loader.events)
+        c.resume()
+        assertEquals(false, c.isPaused)
+        assertEquals(10_000L, dwell.delayMs)
+    }
+
+    @Test
+    fun nextSkipsDwellTimeAndStaysPausedIfPaused() {
+        val c = controller(page(10, 0, true), page(20, 0, true))
+        c.start()
+        c.onPageLoaded(0)
+        c.pause()
+        c.onPageLoaded(1)
+        c.next()
+        assertEquals(listOf("show0", "show1"), shows())
+        assertEquals(null, dwell.delayMs) // still paused
+        c.resume()
+        assertEquals(20_000L, dwell.delayMs)
+    }
+
+    @Test
+    fun nextWaitsForNextPageIfItIsNotLoadedYet() {
+        val c = controller(page(10, 0, true), page(20, 0, true))
+        c.start()
+        c.onPageLoaded(0)
+        c.next()
+        assertEquals(listOf("show0"), shows())
+        c.onPageLoaded(1)
+        assertEquals(listOf("show0", "show1"), shows())
+    }
+
+    @Test
+    fun previousGoesBackAndWrapsAround() {
+        val c = controller(page(10, 0, true), page(20, 0, true))
+        c.start()
+        c.onPageLoaded(0)
+        c.previous() // wraps to page 1, which is loaded anew
+        assertEquals("load1", loader.events.last())
+        c.onPageLoaded(1)
+        assertEquals(listOf("show0", "show1"), shows())
+        assertEquals(20_000L, dwell.delayMs)
+    }
+
+    @Test
+    fun reloadLoadsCurrentPageAgainAndShowsItWhenDone() {
+        val c = controller(page(10, 0, false), page(20, 0, false))
+        c.start()
+        c.onPageLoaded(0)
+        c.onPageLoaded(1)
+        c.reload()
+        assertEquals("load0", loader.events.last())
+        c.onPageLoaded(0)
+        assertEquals(listOf("show0", "show0"), shows())
+    }
+
+    @Test
+    fun controlBeforeFirstPageIsShownDoesNothing() {
+        val c = controller(page(10, 0, true))
+        c.start()
+        c.next()
+        c.previous()
+        c.reload()
+        assertEquals(listOf("load0"), loader.events)
+    }
+
+    @Test
+    fun stopResetsPause() {
+        val c = controller(page(10, 0, true))
+        c.start()
+        c.pause()
+        c.stop()
+        assertEquals(false, c.isPaused)
     }
 }

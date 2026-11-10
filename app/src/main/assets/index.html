@@ -63,6 +63,22 @@
   button:disabled { opacity: .5; cursor: default; }
   svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
+  .status { margin-bottom: 16px; }
+  .ctl { display: flex; gap: 6px; }
+  .warnings { list-style: none; margin: 0; padding: 8px 8px 0; display: grid; gap: 6px; }
+  .warnings li { padding: 8px 12px; border-radius: 8px; background: var(--bad-soft); color: var(--bad); font-size: 14px; }
+  #states { list-style: none; margin: 0; padding: 8px; display: grid; gap: 6px; }
+  .st { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 10px; align-items: center;
+        padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; }
+  .st.current { border-color: var(--accent); background: var(--accent-soft); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+  .dot.ok { background: var(--ok); }
+  .dot.error { background: var(--bad); }
+  .st-url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+  .st-meta { font-size: 13px; color: var(--muted); text-align: right; }
+  .st-meta.error { color: var(--bad); }
+  .sys { margin: 0; padding: 4px 16px 12px; font-size: 13px; color: var(--muted); }
+
   .empty { padding: 28px 16px; text-align: center; color: var(--muted); }
 
   .bar { position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 16px; background: var(--surface);
@@ -75,6 +91,8 @@
 
   @media (max-width: 720px) {
     .row { grid-template-columns: 32px repeat(3, minmax(0, 1fr)); }
+    .st { grid-template-columns: 12px minmax(0, 1fr); }
+    .st-meta { grid-column: 2; text-align: left; }
     .row .url { grid-column: 2 / -1; }
     .row .dur { grid-column: 2; }
     .row .zm { grid-column: 3; }
@@ -96,6 +114,27 @@
       <p>Seiten, Anzeigedauer und Zoom – Änderungen gelten sofort nach dem Speichern.</p>
     </div>
   </header>
+
+  <section class="card status" aria-labelledby="status-title">
+    <div class="card-head">
+      <h2 id="status-title">Status</h2>
+      <div class="ctl">
+        <button type="button" class="icon" data-ctl="prev" title="Vorherige Seite" aria-label="Vorherige Seite">
+          <svg viewBox="0 0 24 24"><path d="M19 20L9 12l10-8zM5 4v16"/></svg>
+        </button>
+        <button type="button" class="icon" id="pause" data-ctl="pause" title="Rotation anhalten" aria-label="Rotation anhalten"></button>
+        <button type="button" class="icon" data-ctl="next" title="Nächste Seite" aria-label="Nächste Seite">
+          <svg viewBox="0 0 24 24"><path d="M5 4l10 8-10 8zM19 4v16"/></svg>
+        </button>
+        <button type="button" class="icon" data-ctl="reload" title="Aktuelle Seite neu laden" aria-label="Aktuelle Seite neu laden">
+          <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/></svg>
+        </button>
+      </div>
+    </div>
+    <ul class="warnings" id="warnings" hidden></ul>
+    <ul id="states"></ul>
+    <p class="sys" id="sys">Lade Status …</p>
+  </section>
 
   <section class="card" aria-labelledby="pages-title">
     <div class="card-head">
@@ -129,6 +168,14 @@ const ICON = {
   down: '<svg viewBox="0 0 24 24"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>',
   del: '<svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
 };
+
+const ICON_PAUSE = '<svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg>';
+const ICON_PLAY = '<svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg>';
+const states = document.getElementById('states');
+const warnings = document.getElementById('warnings');
+const sys = document.getElementById('sys');
+const pauseBtn = document.getElementById('pause');
+let paused = false;
 
 function say(text, cls) { msg.textContent = text; msg.className = cls; }
 
@@ -244,12 +291,76 @@ saveBtn.addEventListener('click', async () => {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
     say('Gespeichert – Rotation neu gestartet.', 'ok');
+    setTimeout(pollStatus, 400);
   } catch (e) {
     say('Fehler: ' + e.message, 'err');
   } finally {
     saveBtn.disabled = false;
   }
 });
+
+function ago(seconds) {
+  if (seconds == null) return '–';
+  if (seconds < 60) return `vor ${seconds} s`;
+  if (seconds < 3600) return `vor ${Math.floor(seconds / 60)} min`;
+  return `vor ${Math.floor(seconds / 3600)} h`;
+}
+
+function pageMeta(p) {
+  if (p.state === 'error') return `Fehler ${ago(p.errorAgoSeconds)}: ${p.error}`;
+  if (p.state === 'pending') return 'noch nicht geladen';
+  const took = p.loadMs == null ? '' : ` in ${(p.loadMs / 1000).toFixed(1)} s`;
+  return `geladen ${ago(p.loadedAgoSeconds)}${took}` + (p.failures ? ` · ${p.failures} Fehler` : '');
+}
+
+function renderStatus(d) {
+  paused = d.paused;
+  pauseBtn.innerHTML = paused ? ICON_PLAY : ICON_PAUSE;
+  pauseBtn.dataset.ctl = paused ? 'resume' : 'pause';
+  pauseBtn.title = pauseBtn.ariaLabel = paused ? 'Rotation fortsetzen' : 'Rotation anhalten';
+  warnings.replaceChildren(...d.warnings.map((w) => Object.assign(document.createElement('li'), { textContent: w })));
+  warnings.hidden = d.warnings.length === 0;
+  states.replaceChildren(...d.pages.map((p) => {
+    const li = document.createElement('li');
+    li.className = 'st' + (p.current ? ' current' : '');
+    const dot = Object.assign(document.createElement('span'), { className: 'dot ' + p.state });
+    const url = Object.assign(document.createElement('span'), { className: 'st-url', textContent: `${p.index + 1}. ${p.url}`, title: p.url });
+    const meta = Object.assign(document.createElement('span'), { className: 'st-meta ' + p.state, textContent: pageMeta(p) });
+    li.append(dot, url, meta);
+    return li;
+  }));
+  const m = d.memory;
+  const hours = Math.floor(d.uptimeSeconds / 3600);
+  const uptime = hours >= 1 ? `${hours} h` : `${Math.floor(d.uptimeSeconds / 60)} min`;
+  sys.textContent = `${paused ? 'Angehalten · ' : ''}Freier Speicher ${m.availMb} / ${m.totalMb} MB · ${m.webViews} WebView(s) · App läuft seit ${uptime}`;
+}
+
+async function pollStatus() {
+  if (document.hidden) return;
+  try {
+    const res = await fetch('/api/status');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    renderStatus(data);
+  } catch (e) {
+    sys.textContent = 'Status nicht erreichbar: ' + e.message;
+  }
+}
+
+document.querySelector('.ctl').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-ctl]');
+  if (!btn) return;
+  try {
+    const res = await fetch('/api/control', { method: 'POST', body: JSON.stringify({ action: btn.dataset.ctl }) });
+    if (!res.ok) throw new Error((await res.json()).error);
+    setTimeout(pollStatus, 400);
+  } catch (err) {
+    say('Steuerung fehlgeschlagen: ' + err.message, 'err');
+  }
+});
+
+setInterval(pollStatus, 5000);
+pollStatus();
 
 load().catch((e) => say('Laden fehlgeschlagen: ' + e.message, 'err'));
 </script>
