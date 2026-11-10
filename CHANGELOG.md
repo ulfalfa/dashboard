@@ -1,4 +1,13 @@
 # Changelog
+## v0.4.0 - 2026-11-10
+
+### Bug fixes
+
+- Apply explicit scale at 100% zoom (#9)
+
+### Features
+
+- Portal status view, remote control and memory warnings (#10)
 ## v0.3.1 - 2026-11-10
 
 ### Bug fixes
