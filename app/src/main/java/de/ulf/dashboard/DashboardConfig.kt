@@ -6,7 +6,7 @@ import org.json.JSONObject
 
 class ConfigException(message: String, cause: Throwable?) : Exception(message, cause)
 
-/** Parses/serializes dashboards.json: {"pages":[{"url":"https://...","seconds":30,"zoom":100,"renderDelaySeconds":0,"reload":true}, ...]} */
+/** Parses/serializes dashboards.json: {"pages":[{"url":"https://...","seconds":30,"zoom":100,"renderDelaySeconds":0,"reload":true,"desktop":true}, ...]}; "desktop" is optional (default true) */
 object DashboardConfig {
     private const val MIN_SECONDS = 1
     private const val MIN_RENDER_DELAY = 0
@@ -25,7 +25,7 @@ object DashboardConfig {
         val entries = JSONArray()
         pages.forEach {
             entries.put(JSONObject().put("url", it.url).put("seconds", it.seconds).put("zoom", it.zoom)
-                    .put("renderDelaySeconds", it.renderDelaySeconds).put("reload", it.reload)
+                    .put("renderDelaySeconds", it.renderDelaySeconds).put("reload", it.reload).put("desktop", it.desktop)
             )
         }
         return JSONObject().put("pages", entries).toString(2)
@@ -46,6 +46,7 @@ object DashboardConfig {
             val zoom = entry.getInt("zoom")
             val renderDelay = entry.getInt("renderDelaySeconds")
             val reload = entry.getBoolean("reload")
+            val desktop = if (entry.has("desktop")) entry.getBoolean("desktop") else true // older configs have no such field
             if (!url.startsWith("http://") && !url.startsWith("https://")) {
                 throw ConfigException("pages[$i].url must start with http:// or https:// but was \"$url\"", null)
             }
@@ -58,10 +59,10 @@ object DashboardConfig {
             if (renderDelay < MIN_RENDER_DELAY) {
                 throw ConfigException("pages[$i].renderDelaySeconds must be >= $MIN_RENDER_DELAY but was $renderDelay", null)
             }
-            Page(url, seconds, zoom, renderDelay, reload)
+            Page(url, seconds, zoom, renderDelay, reload, desktop)
         } catch (e: JSONException) {
             throw ConfigException(
-                "pages[$i] needs a string \"url\" and int \"seconds\", \"zoom\" and \"renderDelaySeconds\" and boolean \"reload\" (${e.message})", e
+                "pages[$i] needs a string \"url\" and int \"seconds\", \"zoom\" and \"renderDelaySeconds\" and boolean \"reload\" (and optional boolean \"desktop\") (${e.message})", e
             )
         }
 }

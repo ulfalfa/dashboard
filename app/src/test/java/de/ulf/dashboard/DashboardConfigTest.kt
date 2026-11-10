@@ -1,6 +1,7 @@
 package de.ulf.dashboard
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.assertThrows
 import org.junit.Test
@@ -86,8 +87,27 @@ class DashboardConfigTest {
     }
 
     @Test
+    fun desktopDefaultsToTrueWhenMissing() {
+        val pages = DashboardConfig.parse("""{"pages":[{"url":"https://a","seconds":10,"zoom":100,"renderDelaySeconds":0,"reload":true}]}""")
+        assertTrue(pages[0].desktop)
+    }
+
+    @Test
+    fun readsDesktopFlag() {
+        val pages = DashboardConfig.parse("""{"pages":[{"url":"https://a","seconds":10,"zoom":100,"renderDelaySeconds":0,"reload":true,"desktop":false}]}""")
+        assertFalse(pages[0].desktop)
+    }
+
+    @Test
+    fun rejectsNonBooleanDesktop() {
+        assertThrows(ConfigException::class.java) {
+            DashboardConfig.parse("""{"pages":[{"url":"https://a","seconds":10,"zoom":100,"renderDelaySeconds":0,"reload":true,"desktop":"yes"}]}""")
+        }
+    }
+
+    @Test
     fun roundTripsThroughJson() {
-        val pages = listOf(Page("https://a", 10, 100, 0, true), Page("https://b", 5, 200, 4, true))
+        val pages = listOf(Page("https://a", 10, 100, 0, true), Page("https://b", 5, 200, 4, true, desktop = false))
         assertEquals(pages, DashboardConfig.parse(DashboardConfig.toJson(pages)))
     }
 }

@@ -100,9 +100,13 @@ class MainActivity : Activity() {
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
         settings.mediaPlaybackRequiresUserGesture = false
+        if (page.desktop) settings.userAgentString = desktopUserAgent(settings.userAgentString)
         webViewClient = DashboardClient(index)
         applyZoom(this, page.zoom)
     }
+
+    /** The board is a 4K screen, not a phone: drop the "Mobile" and WebView ("; wv") markers so sites serve their desktop layout. */
+    private fun desktopUserAgent(default: String): String = default.replace("; wv", "").replace(" Mobile", "")
 
     private fun buildWebViews() {
         webViews.forEach { it.destroy() }

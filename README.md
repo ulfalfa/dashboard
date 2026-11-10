@@ -21,6 +21,7 @@ One-time setup of a signing key (keep the keystore safe - updates must be signed
 
 ## Kiosk setup on the ViewBoard
 - Autostart: the app registers as a Home launcher. After installing, press Home and choose "Dashboard" -> "Always"; Android then starts it after every boot.
+- Per page `desktop` (default `true`): sends a desktop user agent (no `Mobile`/WebView marker) so sites like spiegel.de serve their desktop layout instead of the phone layout. Switch it off per page in the portal if a page needs its mobile layout. Configs without the field behave as `true`.
 - Per page `renderDelaySeconds`: wait after the load event (late-rendering Grafana panels) before the display time starts.
 - Preloading: every page has its own WebView; the next page loads in the background while the current one is shown, so switching is instant. Per page `reload`: `true` reloads it in the background before every appearance (fresh data), `false` loads it only once (use with the page's own auto refresh, e.g. Grafana). Each page keeps a WebView in memory.
 - If the WebView renderer process dies, the app replaces the WebView and restarts the rotation.
