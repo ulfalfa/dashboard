@@ -13,9 +13,15 @@ class ConfigApiTest {
 
     private val seed = """{"pages":[{"url":"https://seed","seconds":10,"zoom":100,"renderDelaySeconds":0,"reload":true}]}"""
     private val changes = mutableListOf<List<Page>>()
+    private val actions = mutableListOf<ControlAction>()
+
+    private val operations = object : DashboardOperations {
+        override fun statusJson(): String = "{\"paused\":false}"
+        override fun control(action: ControlAction) { actions += action }
+    }
 
     private fun api(): ConfigApi =
-        ConfigApi(ConfigStore(File(tmp.root, "d.json"), seed), "<html>ui</html>") { changes += it }
+        ConfigApi(ConfigStore(File(tmp.root, "d.json"), seed), "<html>ui</html>", operations) { changes += it }
 
     @Test
     fun servesIndexHtml() {
@@ -55,5 +61,31 @@ class ConfigApiTest {
         assertEquals(404, api().handle("GET", "/nope", "").status)
         assertEquals(405, api().handle("DELETE", "/api/pages", "").status)
         assertEquals(405, api().handle("POST", "/", "").status)
+    }
+
+    @Test
+    fun statusIsServedFromOperations() {
+        val r = api().handle("GET", "/api/status", "")
+        assertEquals(200, r.status)
+        assertEquals("{\"paused\":false}", r.body)
+        assertEquals(405, api().handle("POST", "/api/status", "").status)
+    }
+
+    @Test
+    fun controlRunsKnownActions() {
+        val api = api()
+        assertEquals(200, api.handle("POST", "/api/control", "{\"action\":\"next\"}").status)
+        assertEquals(200, api.handle("POST", "/api/control", "{\"action\":\"prev\"}").status)
+        assertEquals(listOf(ControlAction.NEXT, ControlAction.PREVIOUS), actions)
+    }
+
+    @Test
+    fun controlRejectsUnknownActionsAndBadBodies() {
+        val api = api()
+        assertEquals(400, api.handle("POST", "/api/control", "{\"action\":\"explode\"}").status)
+        assertEquals(400, api.handle("POST", "/api/control", "nope").status)
+        assertEquals(400, api.handle("POST", "/api/control", "{}").status)
+        assertEquals(405, api.handle("GET", "/api/control", "").status)
+        assertTrue(actions.isEmpty())
     }
 }

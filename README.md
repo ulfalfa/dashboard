@@ -25,5 +25,15 @@ One-time setup of a signing key (keep the keystore safe - updates must be signed
 - Preloading: every page has its own WebView; the next page loads in the background while the current one is shown, so switching is instant. Per page `reload`: `true` reloads it in the background before every appearance (fresh data), `false` loads it only once (use with the page's own auto refresh, e.g. Grafana). Each page keeps a WebView in memory.
 - If the WebView renderer process dies, the app replaces the WebView and restarts the rotation.
 
+## Status and remote control
+The portal (port 2411) shows a status card above the rotation settings, refreshed every 5 s: per page the last successful load (age, load time), the last error and the failure count, plus free memory, the number of WebViews and the app uptime. It warns when there are more than 8 pages (every page keeps a WebView in memory) or when Android reports low memory.
+
+Buttons (previous / pause-resume / next / reload current) control the rotation without touching the board. The same is available for scripts and monitoring (Basic auth as below):
+
+    curl -u admin:<password> http://<board-ip>:2411/api/status
+    curl -u admin:<password> -X POST -d '{"action":"next"}' http://<board-ip>:2411/api/control   # next | prev | pause | resume | reload
+
+Pause keeps the current page on screen while the next one keeps preloading; a config change or the app going to the background resets it.
+
 ## Portal login
 The settings portal (port 2411) is protected with HTTP Basic auth: user `admin`, password generated on first start. It is shown in the side menu (swipe from the left edge) and can be regenerated there ("Neues Passwort erzeugen"). Basic auth is not encrypted on plain HTTP - use it in a trusted LAN only.

@@ -2,6 +2,7 @@ package de.ulf.dashboard
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.app.ActivityManager
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
@@ -45,10 +46,11 @@ class MainActivity : Activity() {
     }
 
     private lateinit var pagesLayout: FrameLayout // one stacked WebView per page; the shown one is on top
-    private var pages: List<Page> = emptyList()
+    @Volatile private var pages: List<Page> = emptyList() // read by HTTP threads for the status view
     private var webViews: List<WebView> = emptyList()
     private lateinit var status: TextView
-    private var controller: RotationController? = null
+    @Volatile private var controller: RotationController? = null
+    private val tracker = StatusTracker()
     private lateinit var drawer: SettingsDrawer
     private lateinit var api: ConfigApi
     private lateinit var store: ConfigStore
@@ -85,7 +87,7 @@ class MainActivity : Activity() {
             emptyList()
         }
         if (pages.isNotEmpty()) applyConfig(pages)
-        api = ConfigApi(store, readAsset(UI_ASSET)) { changed -> runOnUiThread { applyConfig(changed) } }
+        api = ConfigApi(store, readAsset(UI_ASSET), RemoteOperations()) { changed -> runOnUiThread { applyConfig(changed) } }
         setServerEnabled(getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(PREF_SERVER_ENABLED, true))
     }
 
@@ -227,6 +229,7 @@ class MainActivity : Activity() {
     private fun applyConfig(newPages: List<Page>) {
         controller?.stop()
         pages = newPages
+        tracker.reset(newPages.size)
         buildWebViews()
         controller = RotationController(
             pages, WebViewLoader(), HandlerTimer(), HandlerTimer(), LOAD_TIMEOUT_MS, ERROR_DELAY_MS
@@ -279,14 +282,44 @@ class MainActivity : Activity() {
     private inner class WebViewLoader : PageLoader {
         override fun load(index: Int) {
             Log.i(TAG, "load ${pages[index].url}")
+            tracker.loadStarted(index)
             webViews[index].loadUrl(pages[index].url)
         }
 
         override fun show(index: Int) {
             Log.i(TAG, "show ${pages[index].url}")
             status.text = ""
+            tracker.shown(index)
             webViews[index].bringToFront()
         }
+
+        override fun loaded(index: Int) = tracker.loaded(index)
+
+        override fun timedOut(index: Int) = tracker.failed(index, "Timeout nach ${LOAD_TIMEOUT_MS / 1000} s")
+    }
+
+    /** Backs the portal's status view and remote control; HTTP threads hop to the UI thread for anything that touches views. */
+    private inner class RemoteOperations : DashboardOperations {
+        override fun statusJson(): String = tracker.toJson(pages, controller?.isPaused == true, memoryInfo())
+
+        override fun control(action: ControlAction) {
+            runOnUiThread {
+                val c = controller ?: return@runOnUiThread
+                when (action) {
+                    ControlAction.NEXT -> c.next()
+                    ControlAction.PREVIOUS -> c.previous()
+                    ControlAction.PAUSE -> c.pause()
+                    ControlAction.RESUME -> c.resume()
+                    ControlAction.RELOAD -> c.reload()
+                }
+            }
+        }
+    }
+
+    private fun memoryInfo(): MemoryInfo {
+        val info = ActivityManager.MemoryInfo()
+        getSystemService(ActivityManager::class.java).getMemoryInfo(info)
+        return MemoryInfo(info.availMem shr 20, info.totalMem shr 20, info.lowMemory)
     }
 
     private class HandlerTimer : Timer {
@@ -327,6 +360,7 @@ class MainActivity : Activity() {
 
         private fun fail(message: String) {
             Log.w(TAG, "failed $message")
+            tracker.failed(index, message)
             status.text = "Load failed: $message"
             controller?.onPageFailed(index)
         }
