@@ -20,6 +20,7 @@ import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
@@ -100,13 +101,20 @@ class MainActivity : Activity() {
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
         settings.mediaPlaybackRequiresUserGesture = false
-        if (page.desktop) settings.userAgentString = desktopUserAgent(settings.userAgentString)
+        if (page.desktop) applyDesktopUserAgent(settings)
         webViewClient = DashboardClient(index)
         applyZoom(this, page.zoom)
     }
 
-    /** The board is a 4K screen, not a phone: drop the "Mobile" and WebView ("; wv") markers so sites serve their desktop layout. */
-    private fun desktopUserAgent(default: String): String = default.replace("; wv", "").replace(" Mobile", "")
+    /** The board is a 4K screen, not a phone: send a desktop Chrome UA so sites serve their desktop layout. */
+    private fun applyDesktopUserAgent(settings: WebSettings) {
+        val desktop = UserAgent.desktop(settings.userAgentString)
+        if (desktop == null) {
+            Log.w(TAG, "no Chrome token in user agent '${settings.userAgentString}', keeping the mobile UA - update the system WebView")
+            return
+        }
+        settings.userAgentString = desktop
+    }
 
     private fun buildWebViews() {
         webViews.forEach { it.destroy() }
