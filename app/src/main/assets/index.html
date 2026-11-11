@@ -77,6 +77,10 @@
   .st-url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
   .st-meta { font-size: 13px; color: var(--muted); text-align: right; }
   .st-meta.error { color: var(--bad); }
+  .show-form { display: grid; grid-template-columns: minmax(0, 1fr) 110px auto auto; gap: 10px; align-items: end; padding: 12px 16px; }
+  .show-form .rl { align-self: end; }
+  .show-state { margin: 0; padding: 0 16px 12px; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+  .show-state.active { color: var(--accent); font-weight: 600; }
   .sys { margin: 0; padding: 4px 16px 12px; font-size: 13px; color: var(--muted); }
 
   .empty { padding: 28px 16px; text-align: center; color: var(--muted); }
@@ -91,6 +95,8 @@
 
   @media (max-width: 720px) {
     .row { grid-template-columns: 32px repeat(3, minmax(0, 1fr)); }
+    .show-form { grid-template-columns: 1fr 1fr; }
+    .show-form .url { grid-column: 1 / -1; }
     .st { grid-template-columns: 12px minmax(0, 1fr); }
     .st-meta { grid-column: 2; text-align: left; }
     .row .url { grid-column: 2 / -1; }
@@ -136,6 +142,26 @@
     <p class="sys" id="sys">Lade Status …</p>
   </section>
 
+  <section class="card status" aria-labelledby="show-title">
+    <div class="card-head">
+      <h2 id="show-title">Seite aufs Board werfen</h2>
+    </div>
+    <form class="show-form" id="show-form">
+      <label class="url">URL
+        <input id="show-url" type="url" placeholder="https://…" inputmode="url" autocomplete="off" spellcheck="false" required>
+      </label>
+      <label>Zoom
+        <span class="field"><input id="show-zoom" type="number" min="10" max="500" step="5" value="100" inputmode="numeric"><span class="unit">%</span></span>
+      </label>
+      <label class="rl"><input id="show-desktop" type="checkbox" checked>Desktop</label>
+      <div class="tools">
+        <button type="submit" class="primary" id="show-go">Anzeigen</button>
+        <button type="button" id="show-end" disabled>Beenden</button>
+      </div>
+    </form>
+    <p class="show-state" id="show-state">Die Rotation bleibt angehalten, bis die Seite hier oder im Menü auf dem Board beendet wird.</p>
+  </section>
+
   <section class="card" aria-labelledby="pages-title">
     <div class="card-head">
       <h2 id="pages-title">Rotation</h2>
@@ -175,6 +201,10 @@ const states = document.getElementById('states');
 const warnings = document.getElementById('warnings');
 const sys = document.getElementById('sys');
 const pauseBtn = document.getElementById('pause');
+const showForm = document.getElementById('show-form');
+const showEnd = document.getElementById('show-end');
+const showState = document.getElementById('show-state');
+const ctlButtons = document.querySelectorAll('.ctl button');
 let paused = false;
 
 function say(text, cls) { msg.textContent = text; msg.className = cls; }
@@ -334,6 +364,12 @@ function renderStatus(d) {
     li.append(dot, url, meta);
     return li;
   }));
+  ctlButtons.forEach((b) => { b.disabled = d.overlay != null; });
+  showEnd.disabled = d.overlay == null;
+  showState.classList.toggle('active', d.overlay != null);
+  showState.textContent = d.overlay != null
+    ? `Eingeblendet: ${d.overlay} – die Rotation ist angehalten, bis du beendest.`
+    : 'Die Rotation bleibt angehalten, bis die Seite hier oder im Menü auf dem Board beendet wird.';
   const m = d.memory;
   const hours = Math.floor(d.uptimeSeconds / 3600);
   const uptime = hours >= 1 ? `${hours} h` : `${Math.floor(d.uptimeSeconds / 60)} min`;
@@ -363,6 +399,26 @@ document.querySelector('.ctl').addEventListener('click', async (e) => {
     say('Steuerung fehlgeschlagen: ' + err.message, 'err');
   }
 });
+
+async function showRequest(method, body) {
+  try {
+    const res = await fetch('/api/show', { method, body });
+    if (!res.ok) throw new Error((await res.json()).error);
+    setTimeout(pollStatus, 400);
+  } catch (err) {
+    say('Fehler: ' + err.message, 'err');
+  }
+}
+
+showForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  showRequest('POST', JSON.stringify({
+    url: document.getElementById('show-url').value.trim(),
+    zoom: Number(document.getElementById('show-zoom').value),
+    desktop: document.getElementById('show-desktop').checked,
+  }));
+});
+showEnd.addEventListener('click', () => showRequest('DELETE'));
 
 setInterval(pollStatus, 5000);
 pollStatus();

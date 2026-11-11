@@ -5,6 +5,7 @@ import android.app.Activity
 import android.app.ActivityManager
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -52,6 +53,9 @@ class MainActivity : Activity() {
     private lateinit var status: TextView
     @Volatile private var controller: RotationController? = null
     private val tracker = StatusTracker()
+    private var overlay: WebView? = null // page thrown onto the board ad hoc, above all rotation pages
+    @Volatile private var overlayUrl: String? = null // read by HTTP threads for the status view
+    private var resumeAfterOverlay = true
     private lateinit var drawer: SettingsDrawer
     private lateinit var api: ConfigApi
     private lateinit var store: ConfigStore
@@ -69,6 +73,7 @@ class MainActivity : Activity() {
             override fun onExport() = pickFile(Intent.ACTION_CREATE_DOCUMENT, REQUEST_EXPORT)
             override fun onImport() = pickFile(Intent.ACTION_OPEN_DOCUMENT, REQUEST_IMPORT)
             override fun onNewPassword() = regeneratePassword()
+            override fun onEndOverlay() = endOverlay()
         })
         pagesLayout = FrameLayout(this)
         setContentView(FrameLayout(this).apply {
@@ -120,6 +125,55 @@ class MainActivity : Activity() {
         webViews.forEach { it.destroy() }
         pagesLayout.removeAllViews()
         webViews = pages.mapIndexed { index, page -> createWebView(index, page).also(pagesLayout::addView) }
+        overlay?.let(pagesLayout::addView) // stays on top of the rebuilt pages
+    }
+
+    /** Starts the rotation; while a page is shown above it the rotation only preloads and never takes over. */
+    private fun startRotation() {
+        controller?.start()
+        if (overlay != null) controller?.pause()
+    }
+
+    /**
+     * Shows [request] above the rotation, which stays paused until [endOverlay] (drawer button or API).
+     * Links open in the same WebView and pinch zoom works, so one can browse on from the given URL.
+     */
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun showOverlay(request: ShowRequest) {
+        val replacing = overlay
+        if (replacing == null) resumeAfterOverlay = controller?.isPaused != true
+        replacing?.let { pagesLayout.removeView(it); it.destroy() }
+        val view = WebView(this).apply {
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.mediaPlaybackRequiresUserGesture = false
+            settings.setSupportZoom(true)
+            settings.builtInZoomControls = true
+            settings.displayZoomControls = false
+            if (request.desktop) applyDesktopUserAgent(settings)
+            webViewClient = OverlayClient()
+            applyZoom(this, request.zoom)
+            loadUrl(request.url)
+        }
+        Log.i(TAG, "overlay ${request.url}")
+        overlay = view
+        overlayUrl = request.url
+        pagesLayout.addView(view)
+        controller?.pause()
+        status.text = ""
+        drawer.showOverlay(request.url)
+    }
+
+    private fun endOverlay() {
+        val view = overlay ?: return
+        Log.i(TAG, "overlay ended")
+        pagesLayout.removeView(view)
+        view.destroy()
+        overlay = null
+        overlayUrl = null
+        status.text = ""
+        drawer.showOverlay(null)
+        if (resumeAfterOverlay) controller?.resume()
     }
 
     /** The renderer process died (crash or OOM kill): all WebViews are unusable, so rebuild them and restart the rotation. */
@@ -127,7 +181,7 @@ class MainActivity : Activity() {
         controller?.stop()
         buildWebViews()
         status.text = "Renderer restarted"
-        if (resumed) controller?.start()
+        if (resumed) startRotation()
     }
 
     /** Invisible strip on the left edge: swiping right from it opens the drawer. */
@@ -246,14 +300,14 @@ class MainActivity : Activity() {
         controller = RotationController(
             pages, WebViewLoader(), HandlerTimer(), HandlerTimer(), LOAD_TIMEOUT_MS, ERROR_DELAY_MS
         )
-        if (resumed) controller?.start()
+        if (resumed) startRotation()
     }
 
     override fun onResume() {
         super.onResume()
         hideSystemBars()
         resumed = true
-        controller?.start()
+        startRotation()
     }
 
     override fun onPause() {
@@ -267,9 +321,9 @@ class MainActivity : Activity() {
         super.onDestroy()
     }
 
-    @Deprecated("Kiosk: back button only closes the drawer")
+    @Deprecated("Kiosk: back button closes the drawer or goes back in a page shown above the rotation")
     override fun onBackPressed() {
-        if (drawer.isOpen) drawer.close()
+        if (drawer.isOpen) drawer.close() else overlay?.takeIf { it.canGoBack() }?.goBack()
     }
 
     private fun hideSystemBars() {
@@ -304,6 +358,7 @@ class MainActivity : Activity() {
             status.text = ""
             tracker.shown(index)
             webViews[index].bringToFront()
+            overlay?.bringToFront()
         }
 
         override fun loaded(index: Int) = tracker.loaded(index)
@@ -313,10 +368,15 @@ class MainActivity : Activity() {
 
     /** Backs the portal's status view and remote control; HTTP threads hop to the UI thread for anything that touches views. */
     private inner class RemoteOperations : DashboardOperations {
-        override fun statusJson(): String = tracker.toJson(pages, controller?.isPaused == true, memoryInfo())
+        override fun statusJson(): String = tracker.toJson(pages, controller?.isPaused == true, memoryInfo(), overlayUrl)
+
+        override fun show(request: ShowRequest) = runOnUiThread { showOverlay(request) }
+
+        override fun endShow() = runOnUiThread { endOverlay() }
 
         override fun control(action: ControlAction) {
             runOnUiThread {
+                if (overlay != null) return@runOnUiThread // the rotation is held until the shown page is ended
                 val c = controller ?: return@runOnUiThread
                 when (action) {
                     ControlAction.NEXT -> c.next()
@@ -326,6 +386,26 @@ class MainActivity : Activity() {
                     ControlAction.RELOAD -> c.reload()
                 }
             }
+        }
+    }
+
+    /** Client of the page shown above the rotation: reports errors on screen, never feeds the rotation controller. */
+    private inner class OverlayClient : WebViewClient() {
+        override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
+            status.text = ""
+        }
+
+        override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
+            if (request.isForMainFrame) status.text = "Load failed: ${request.url}: ${error.description}"
+        }
+
+        override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+            Log.e(TAG, "overlay renderer gone, crashed=${detail.didCrash()}")
+            if (view === overlay) {
+                endOverlay()
+                status.text = "Eingeblendete Seite abgestürzt - Rotation läuft wieder"
+            }
+            return true
         }
     }
 

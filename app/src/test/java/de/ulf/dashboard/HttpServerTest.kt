@@ -25,6 +25,8 @@ class HttpServerTest {
         val operations = object : DashboardOperations {
             override fun statusJson(): String = "{}"
             override fun control(action: ControlAction) {}
+            override fun show(request: ShowRequest) {}
+            override fun endShow() {}
         }
         val api = ConfigApi(ConfigStore(File(tmp.root, "d.json"), seed), "<html>ui</html>", operations) { changes += it }
         server = HttpServer(port, api, { PASSWORD }) { }

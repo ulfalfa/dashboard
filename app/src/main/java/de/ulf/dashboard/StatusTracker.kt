@@ -60,7 +60,7 @@ class StatusTracker(private val clock: () -> Long = System::currentTimeMillis) {
     }
 
     @Synchronized
-    fun toJson(pages: List<Page>, paused: Boolean, memory: MemoryInfo): String {
+    fun toJson(pages: List<Page>, paused: Boolean, memory: MemoryInfo, overlayUrl: String? = null): String {
         val now = clock()
         val entries = JSONArray()
         pages.forEachIndexed { i, page ->
@@ -84,6 +84,7 @@ class StatusTracker(private val clock: () -> Long = System::currentTimeMillis) {
         return JSONObject()
             .put("uptimeSeconds", (now - bootAt) / 1000)
             .put("paused", paused)
+            .put("overlay", overlayUrl ?: JSONObject.NULL)
             .put("pages", entries)
             .put(
                 "memory",
