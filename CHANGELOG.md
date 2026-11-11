@@ -1,4 +1,9 @@
 # Changelog
+## v0.5.0 - 2026-11-11
+
+### Features
+
+- Show any URL on the board via API and portal (#14)
 ## v0.4.3 - 2026-11-10
 
 ### Maintenance
