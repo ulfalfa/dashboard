@@ -20,6 +20,7 @@ interface DrawerListener {
     fun onExport()
     fun onImport()
     fun onNewPassword()
+    fun onEndOverlay()
 }
 
 class SettingsDrawer(context: Context, private val listener: DrawerListener) : FrameLayout(context) {
@@ -36,6 +37,12 @@ class SettingsDrawer(context: Context, private val listener: DrawerListener) : F
     private val credentials = TextView(context).apply { textSize = 15f; setTextColor(WHITE) }
     private val message = TextView(context).apply { textSize = 15f; setTextColor(WHITE) }
     private val panel = LinearLayout(context)
+    private val overlayInfo = TextView(context).apply { textSize = 15f; setTextColor(WHITE); visibility = View.GONE }
+    private val endOverlay = Button(context).apply {
+        text = "Eingeblendete Seite beenden"
+        visibility = View.GONE
+        setOnClickListener { close(); listener.onEndOverlay() }
+    }
     private var updatingSwitch = false
 
     var isOpen = false
@@ -53,6 +60,8 @@ class SettingsDrawer(context: Context, private val listener: DrawerListener) : F
             setPadding(dp(24), dp(32), dp(24), dp(24))
             isClickable = true // swallow touches so they do not hit the scrim underneath
             addView(TextView(context).apply { text = "Dashboard"; textSize = 26f; setTextColor(WHITE) })
+            addView(overlayInfo, rowParams(24))
+            addView(endOverlay, rowParams(8))
             addView(serverSwitch, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
                 .apply { topMargin = dp(32) })
             addView(serverStatus, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
@@ -78,6 +87,13 @@ class SettingsDrawer(context: Context, private val listener: DrawerListener) : F
         serverSwitch.isChecked = running
         updatingSwitch = false
         serverStatus.text = text
+    }
+
+    /** While a page is shown above the rotation the menu offers to end it; the rotation stays paused until then. */
+    fun showOverlay(url: String?) {
+        overlayInfo.text = "Eingeblendet: $url\nDie Rotation ist angehalten."
+        overlayInfo.visibility = if (url == null) View.GONE else View.VISIBLE
+        endOverlay.visibility = overlayInfo.visibility
     }
 
     /** Shows the portal login so it can be read off the board when opening the portal from another device. */

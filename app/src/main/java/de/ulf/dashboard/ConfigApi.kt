@@ -19,6 +19,11 @@ interface DashboardOperations {
     fun statusJson(): String
 
     fun control(action: ControlAction)
+
+    /** Shows [request] above the rotation until [endShow]; replaces a page that is already shown this way. */
+    fun show(request: ShowRequest)
+
+    fun endShow()
 }
 
 /** HTTP-agnostic request handling for the settings UI. */
@@ -34,8 +39,26 @@ class ConfigApi(
             "/api/pages" -> pages(method, body)
             "/api/status" -> onlyFor(method, "GET") { HttpResponse(200, JSON, operations.statusJson()) }
             "/api/control" -> onlyFor(method, "POST") { control(body) }
+            "/api/show" -> show(method, body)
             else -> error(404, "Unknown path $path")
         }
+
+    private fun show(method: String, body: String): HttpResponse =
+        when (method) {
+            "POST" -> try {
+                operations.show(ShowRequest.parse(body))
+                okResponse()
+            } catch (e: ConfigException) {
+                error(400, e.message.orEmpty())
+            }
+            "DELETE" -> {
+                operations.endShow()
+                okResponse()
+            }
+            else -> error(405, "Use POST or DELETE on /api/show")
+        }
+
+    private fun okResponse(): HttpResponse = HttpResponse(200, JSON, JSONObject().put("ok", true).toString())
 
     private fun control(body: String): HttpResponse {
         val id = try {
@@ -45,7 +68,7 @@ class ConfigApi(
         }
         val action = ControlAction.parse(id) ?: return error(400, "Unknown action \"$id\"")
         operations.control(action)
-        return HttpResponse(200, JSON, JSONObject().put("ok", true).toString())
+        return okResponse()
     }
 
     private fun pages(method: String, body: String): HttpResponse =

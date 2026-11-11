@@ -63,6 +63,14 @@ class StatusTrackerTest {
     }
 
     @Test
+    fun reportsTheShownOverlayPage() {
+        tracker.reset(1)
+        assertTrue(status(pages(1)).isNull("overlay"))
+        val s = JSONObject(tracker.toJson(pages(1), false, memory, "https://spiegel.de"))
+        assertEquals("https://spiegel.de", s.getString("overlay"))
+    }
+
+    @Test
     fun resetClearsStatisticsAndIgnoresStaleIndexes() {
         tracker.reset(2)
         tracker.failed(1, "boom")

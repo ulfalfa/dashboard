@@ -34,6 +34,14 @@ Buttons (previous / pause-resume / next / reload current) control the rotation w
     curl -u admin:<password> http://<board-ip>:2411/api/status
     curl -u admin:<password> -X POST -d '{"action":"next"}' http://<board-ip>:2411/api/control   # next | prev | pause | resume | reload
 
+### Throw a page onto the board
+Portal card "Seite aufs Board werfen" or:
+
+    curl -u admin:<password> -X POST -d '{"url":"https://www.spiegel.de","zoom":100,"desktop":true}' http://<board-ip>:2411/api/show
+    curl -u admin:<password> -X DELETE http://<board-ip>:2411/api/show   # end it
+
+Only `url` is required (`http(s)` only; `zoom` default 100, `desktop` default true). The page is shown above the rotation, which stays paused until the page is ended - in the side menu ("Eingeblendete Seite beenden"), in the portal or via `DELETE`. Links open in the same view, pinch zoom works and the back button goes back, so you can browse on from there. It is not saved: after an app restart the rotation runs again. While a page is shown, the pause/next/prev/reload controls are ignored.
+
 Pause keeps the current page on screen while the next one keeps preloading; a config change or the app going to the background resets it.
 
 ## Portal login

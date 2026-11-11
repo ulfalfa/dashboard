@@ -14,10 +14,14 @@ class ConfigApiTest {
     private val seed = """{"pages":[{"url":"https://seed","seconds":10,"zoom":100,"renderDelaySeconds":0,"reload":true}]}"""
     private val changes = mutableListOf<List<Page>>()
     private val actions = mutableListOf<ControlAction>()
+    private val shown = mutableListOf<ShowRequest>()
+    private var ended = 0
 
     private val operations = object : DashboardOperations {
         override fun statusJson(): String = "{\"paused\":false}"
         override fun control(action: ControlAction) { actions += action }
+        override fun show(request: ShowRequest) { shown += request }
+        override fun endShow() { ended++ }
     }
 
     private fun api(): ConfigApi =
@@ -77,6 +81,29 @@ class ConfigApiTest {
         assertEquals(200, api.handle("POST", "/api/control", "{\"action\":\"next\"}").status)
         assertEquals(200, api.handle("POST", "/api/control", "{\"action\":\"prev\"}").status)
         assertEquals(listOf(ControlAction.NEXT, ControlAction.PREVIOUS), actions)
+    }
+
+    @Test
+    fun showPassesTheRequestToOperationsWithDefaults() {
+        val r = api().handle("POST", "/api/show", "{\"url\":\"https://spiegel.de\"}")
+        assertEquals(200, r.status)
+        assertEquals(listOf(ShowRequest("https://spiegel.de", 100, true)), shown)
+    }
+
+    @Test
+    fun showRejectsBadRequests() {
+        val api = api()
+        assertEquals(400, api.handle("POST", "/api/show", "{\"url\":\"javascript:alert(1)\"}").status)
+        assertEquals(400, api.handle("POST", "/api/show", "{}").status)
+        assertEquals(400, api.handle("POST", "/api/show", "nope").status)
+        assertEquals(405, api.handle("GET", "/api/show", "").status)
+        assertTrue(shown.isEmpty())
+    }
+
+    @Test
+    fun deleteEndsTheShownPage() {
+        assertEquals(200, api().handle("DELETE", "/api/show", "").status)
+        assertEquals(1, ended)
     }
 
     @Test

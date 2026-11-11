@@ -10,8 +10,8 @@ class ConfigException(message: String, cause: Throwable?) : Exception(message, c
 object DashboardConfig {
     private const val MIN_SECONDS = 1
     private const val MIN_RENDER_DELAY = 0
-    private const val MIN_ZOOM = 10
-    private const val MAX_ZOOM = 500
+    const val MIN_ZOOM = 10
+    const val MAX_ZOOM = 500
 
     fun parse(json: String): List<Page> {
         val pages = readPages(json)
